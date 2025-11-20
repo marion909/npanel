@@ -34,20 +34,24 @@ class PhpFpmService
         $poolName = Str::slug($domain->domain_name);
         $socketPath = config('npanel.php_fpm_socket_dir') . '/php' . $domain->php_version . '-fpm-' . $poolName . '.sock';
 
-        // Create pool record
-        $pool = PhpFpmPool::create([
-            'domain_id' => $domain->id,
-            'pool_name' => $poolName,
-            'php_version' => $domain->php_version,
-            'socket_path' => $socketPath,
-            'pm_mode' => 'dynamic',
-            'pm_max_children' => 5,
-            'pm_start_servers' => 2,
-            'pm_min_spare_servers' => 1,
-            'pm_max_spare_servers' => 3,
-            'memory_limit' => '128M',
-            'max_execution_time' => 300,
-        ]);
+        // Create or retrieve existing pool record
+        $pool = PhpFpmPool::firstOrCreate(
+            [
+                'pool_name' => $poolName,
+            ],
+            [
+                'domain_id' => $domain->id,
+                'php_version' => $domain->php_version,
+                'socket_path' => $socketPath,
+                'pm_mode' => 'dynamic',
+                'pm_max_children' => 5,
+                'pm_start_servers' => 2,
+                'pm_min_spare_servers' => 1,
+                'pm_max_spare_servers' => 3,
+                'memory_limit' => '128M',
+                'max_execution_time' => 300,
+            ]
+        );
 
         // Generate and write pool configuration
         $configContent = $this->generatePoolConfig($pool, $domain);
