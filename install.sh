@@ -297,22 +297,131 @@ install_npanel() {
     print_success "nPanel installed"
 }
 
-configure_nginx() {
-    print_status "Configuring Nginx for nPanel..."
+configure_catchall() {
+    print_status "Configuring catchall for unmapped domains..."
     
-    # Prompt for domain (or use _ for any domain)
-    read -p "Enter domain for nPanel (or press Enter for IP-based access): " PANEL_DOMAIN
-    if [ -z "$PANEL_DOMAIN" ]; then
-        PANEL_DOMAIN="_"
-        SERVER_NAME_LINE="server_name _;"
-    else
-        SERVER_NAME_LINE="server_name ${PANEL_DOMAIN};"
-    fi
+    # Create SSL directory and self-signed certificate
+    mkdir -p /etc/nginx/ssl
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout /etc/nginx/ssl/default.key \
+        -out /etc/nginx/ssl/default.crt \
+        -subj '/C=AT/ST=Vienna/L=Vienna/O=nPanel/CN=default' \
+        2>/dev/null
     
-    cat > "${NGINX_SITES_AVAILABLE}/npanel.conf" <<EOFNGINX
+    # Create error directory and 404 page
+    mkdir -p /var/www/html/error
+    cat > /var/www/html/error/404.html <<'EOF404'
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domain nicht konfiguriert</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; display: flex; align-items: center;
+            justify-content: center; padding: 20px;
+        }
+        .container {
+            background: white; border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 60px 40px; max-width: 600px; text-align: center;
+        }
+        .error-code { font-size: 120px; font-weight: 700; color: #667eea; }
+        h1 { font-size: 32px; color: #2d3748; margin: 20px 0; }
+        p { font-size: 18px; color: #718096; line-height: 1.6; margin-bottom: 15px; }
+        .domain { font-weight: 600; color: #667eea; word-break: break-all; }
+        .info-box {
+            background: #f7fafc; border-left: 4px solid #667eea;
+            padding: 20px; margin-top: 30px; text-align: left;
+        }
+        .info-box h2 { font-size: 18px; color: #2d3748; margin-bottom: 10px; }
+        .info-box ul { list-style: none; padding-left: 0; }
+        .info-box li { color: #4a5568; margin-bottom: 8px; padding-left: 25px; position: relative; }
+        .info-box li:before { content: "✓"; position: absolute; left: 0; color: #667eea; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-code">404</div>
+        <h1>Domain nicht konfiguriert</h1>
+        <p>Die aufgerufene Domain <span class="domain" id="hostname"></span> ist auf diesem Server nicht eingerichtet.</p>
+        <div class="info-box">
+            <h2>Mögliche Gründe:</h2>
+            <ul>
+                <li>Die Domain wurde noch nicht im Hosting-Panel hinzugefügt</li>
+                <li>Die DNS-Einstellungen sind noch nicht vollständig propagiert</li>
+                <li>Die Domain-Konfiguration wurde gelöscht oder ist deaktiviert</li>
+            </ul>
+        </div>
+        <p style="margin-top: 30px; font-size: 14px; color: #a0aec0;">
+            Wenn Sie der Website-Betreiber sind, melden Sie sich im Hosting-Panel an und fügen Sie diese Domain hinzu.
+        </p>
+    </div>
+    <script>document.getElementById('hostname').textContent = window.location.hostname;</script>
+</body>
+</html>
+EOF404
+    
+    chown -R www-data:www-data /var/www/html/error
+    
+    # Create catchall Nginx config
+    cat > "${NGINX_SITES_AVAILABLE}/000-default-catchall.conf" <<'EOFCATCHALL'
+# Default catchall server for unmapped domains
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
+    server_name _;
+    root /var/www/html/error;
+    
+    error_page 404 /404.html;
+    location = /404.html { internal; }
+    location / { return 404; }
+}
+
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    http2 on;
+    server_name _;
+    
+    ssl_certificate /etc/nginx/ssl/default.crt;
+    ssl_certificate_key /etc/nginx/ssl/default.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    
+    root /var/www/html/error;
+    error_page 404 /404.html;
+    location = /404.html { internal; }
+    location / { return 404; }
+}
+EOFCATCHALL
+    
+    # Enable catchall
+    ln -sf "${NGINX_SITES_AVAILABLE}/000-default-catchall.conf" "${NGINX_SITES_ENABLED}/000-default-catchall.conf"
+    
+    print_success "Catchall configuration created"
+}
+
+configure_nginx() {
+    print_status "Configuring Nginx for nPanel..."
+    
+    # Prompt for domain (or use specific domain)
+    read -p "Enter domain for nPanel: " PANEL_DOMAIN
+    if [ -z "$PANEL_DOMAIN" ]; then
+        print_error "Domain is required"
+        exit 1
+    fi
+    
+    SERVER_NAME_LINE="server_name ${PANEL_DOMAIN} www.${PANEL_DOMAIN};"
+    
+    cat > "${NGINX_SITES_AVAILABLE}/npanel.conf" <<EOFNGINX
+server {
+    listen 80;
+    listen [::]:80;
     ${SERVER_NAME_LINE}
     root ${INSTALL_DIR}/public;
 
@@ -392,8 +501,8 @@ server {
 }
 
 server {
-    listen 443 ssl default_server;
-    listen [::]:443 ssl default_server;
+    listen 443 ssl;
+    listen [::]:443 ssl;
     http2 on;
     server_name ${domain};
     root ${INSTALL_DIR}/public;
@@ -572,6 +681,7 @@ main() {
     setup_database
     install_npanel
     configure_sudo_permissions
+    configure_catchall
     configure_nginx
     configure_supervisor
     configure_cron
