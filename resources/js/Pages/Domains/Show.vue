@@ -1,7 +1,7 @@
 <template>
     <Head :title="`Domain: ${domain.domain_name}`" />
 
-    <AuthenticatedLayout>
+    <AppLayout>
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <!-- Header -->
@@ -159,13 +159,13 @@
                 </div>
             </div>
         </div>
-    </AuthenticatedLayout>
+    </AppLayout>
 </template>
 
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({
     domain: Object
