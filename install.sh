@@ -52,7 +52,20 @@ install_system_dependencies() {
     apt update && apt upgrade -y
     
     print_status "Installing system dependencies..."
-    apt install -y software-properties-common curl wget git unzip supervisor cron
+    # Install packages individually to handle missing ones gracefully
+    apt install -y curl wget git unzip supervisor || true
+    
+    # software-properties-common might not exist on all systems
+    if apt-cache show software-properties-common >/dev/null 2>&1; then
+        apt install -y software-properties-common
+    else
+        print_warning "software-properties-common not available, skipping"
+    fi
+    
+    # cron might be named differently or already installed
+    if ! command -v crontab &> /dev/null; then
+        apt install -y cron || apt install -y cronie || print_warning "Could not install cron"
+    fi
     
     print_success "System dependencies installed"
 }
@@ -86,8 +99,30 @@ install_mysql() {
 
 install_php_versions() {
     print_status "Adding PHP repository..."
-    add-apt-repository ppa:ondrej/php -y
-    apt update
+    
+    # Check if this is Ubuntu/Debian based system
+    if [ -f /etc/debian_version ]; then
+        # Try to add ondrej/php repository
+        if command -v add-apt-repository &> /dev/null; then
+            add-apt-repository ppa:ondrej/php -y 2>/dev/null || {
+                print_warning "Could not add PPA, trying alternative method"
+                # Alternative method for systems without add-apt-repository
+                apt install -y lsb-release ca-certificates apt-transport-https
+                wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg 2>/dev/null || true
+                echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/php.list
+            }
+        else
+            print_warning "add-apt-repository not available, using direct repository add"
+            apt install -y lsb-release ca-certificates apt-transport-https curl
+            curl -sSL https://packages.sury.org/php/README.txt
+            wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+            echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/php.list
+        fi
+        apt update
+    else
+        print_error "This script only supports Debian/Ubuntu based systems"
+        exit 1
+    fi
     
     for version in "${PHP_VERSIONS[@]}"; do
         print_status "Installing PHP ${version}..."
