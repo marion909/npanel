@@ -301,27 +301,31 @@ configure_nginx() {
     print_status "Configuring Nginx for nPanel..."
     
     # Prompt for domain (or use _ for any domain)
-    read -p "Enter domain for nPanel (or press Enter for any domain): " PANEL_DOMAIN
+    read -p "Enter domain for nPanel (or press Enter for IP-based access): " PANEL_DOMAIN
     if [ -z "$PANEL_DOMAIN" ]; then
         PANEL_DOMAIN="_"
+        SERVER_NAME_LINE="server_name _;"
+    else
+        SERVER_NAME_LINE="server_name ${PANEL_DOMAIN};"
     fi
     
-    cat > "${NGINX_SITES_AVAILABLE}/npanel.conf" <<'EOFNGINX'
+    cat > "${NGINX_SITES_AVAILABLE}/npanel.conf" <<EOFNGINX
 server {
-    listen 80;
-    server_name PANEL_DOMAIN_PLACEHOLDER;
-    root INSTALL_DIR_PLACEHOLDER/public;
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    ${SERVER_NAME_LINE}
+    root ${INSTALL_DIR}/public;
 
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
-    add_header X-XSS-Protection "1; mode=block";
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
 
-    index index.php;
+    index index.php index.html;
 
     charset utf-8;
 
     location / {
-        try_files $uri $uri/ /index.php?$query_string;
+        try_files \$uri \$uri/ /index.php?\$query_string;
     }
 
     location = /favicon.ico { access_log off; log_not_found off; }
@@ -329,10 +333,11 @@ server {
 
     error_page 404 /index.php;
 
-    location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/phpPHP_VERSION_PLACEHOLDER-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+    location ~ \.php\$ {
+        fastcgi_pass unix:/var/run/php/php${DEFAULT_PHP_VERSION}-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
         include fastcgi_params;
+        fastcgi_hide_header X-Powered-By;
     }
 
     location ~ /\.(?!well-known).* {
@@ -340,11 +345,6 @@ server {
     }
 }
 EOFNGINX
-    
-    # Replace placeholders
-    sed -i "s|PANEL_DOMAIN_PLACEHOLDER|${PANEL_DOMAIN}|g" "${NGINX_SITES_AVAILABLE}/npanel.conf"
-    sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "${NGINX_SITES_AVAILABLE}/npanel.conf"
-    sed -i "s|PHP_VERSION_PLACEHOLDER|${DEFAULT_PHP_VERSION}|g" "${NGINX_SITES_AVAILABLE}/npanel.conf"
     
     # Remove default site
     rm -f "${NGINX_SITES_ENABLED}/default"
@@ -358,10 +358,12 @@ EOFNGINX
     
     print_success "Nginx configured for ${PANEL_DOMAIN}"
     
-    # Offer SSL installation
-    read -p "Do you want to install SSL certificate now? (y/n): " INSTALL_SSL
-    if [ "${INSTALL_SSL}" = "y" ] || [ "${INSTALL_SSL}" = "Y" ]; then
-        install_ssl "${PANEL_DOMAIN}"
+    # Only offer SSL if a domain was provided
+    if [ "${PANEL_DOMAIN}" != "_" ]; then
+        read -p "Do you want to install SSL certificate now? (y/n): " INSTALL_SSL
+        if [ "${INSTALL_SSL}" = "y" ] || [ "${INSTALL_SSL}" = "Y" ]; then
+            install_ssl "${PANEL_DOMAIN}"
+        fi
     fi
 }
 
@@ -370,6 +372,9 @@ install_ssl() {
     print_status "Installing SSL certificate for ${domain}..."
     
     if [ -f ~/.acme.sh/acme.sh ]; then
+        # Create letsencrypt directory
+        mkdir -p /etc/letsencrypt/live/${domain}
+        
         ~/.acme.sh/acme.sh --issue -d "${domain}" -w "${INSTALL_DIR}/public"
         ~/.acme.sh/acme.sh --install-cert -d "${domain}" \
             --cert-file /etc/letsencrypt/live/${domain}/cert.pem \
@@ -380,13 +385,16 @@ install_ssl() {
         # Update Nginx config with SSL
         cat > "${NGINX_SITES_AVAILABLE}/npanel.conf" <<EOF
 server {
-    listen 80;
+    listen 80 default_server;
+    listen [::]:80 default_server;
     server_name ${domain};
-    return 301 https://\$server_name\$request_uri;
+    return 301 https://\\\$server_name\\\$request_uri;
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    http2 on;
     server_name ${domain};
     root ${INSTALL_DIR}/public;
 
@@ -394,18 +402,19 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
 
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
-    add_header X-XSS-Protection "1; mode=block";
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
-    index index.php;
+    index index.php index.html;
 
     charset utf-8;
 
     location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
+        try_files \\\$uri \\\$uri/ /index.php?\\\$query_string;
     }
 
     location = /favicon.ico { access_log off; log_not_found off; }
@@ -413,10 +422,11 @@ server {
 
     error_page 404 /index.php;
 
-    location ~ \.php$ {
+    location ~ \.php\\\$ {
         fastcgi_pass unix:/var/run/php/php${DEFAULT_PHP_VERSION}-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
+        fastcgi_param SCRIPT_FILENAME \\\$realpath_root\\\$fastcgi_script_name;
         include fastcgi_params;
+        fastcgi_hide_header X-Powered-By;
     }
 
     location ~ /\.(?!well-known).* {
@@ -429,6 +439,26 @@ EOF
         print_success "SSL certificate installed"
     else
         print_error "acme.sh not found"
+    fi
+}
+
+configure_sudo_permissions() {
+    print_status "Configuring sudo permissions for www-data..."
+    
+    cat > /etc/sudoers.d/npanel <<EOF
+# Allow www-data to manage nginx and PHP-FPM services without password
+www-data ALL=(ALL) NOPASSWD: /usr/sbin/nginx, /bin/systemctl reload nginx, /bin/systemctl reload php*-fpm, /usr/bin/systemctl reload nginx, /usr/bin/systemctl reload php*-fpm
+EOF
+    
+    chmod 0440 /etc/sudoers.d/npanel
+    
+    # Verify sudoers file is valid
+    if visudo -c; then
+        print_success "Sudo permissions configured"
+    else
+        print_error "Sudoers file is invalid, removing..."
+        rm -f /etc/sudoers.d/npanel
+        exit 1
     fi
 }
 
@@ -541,6 +571,7 @@ main() {
     install_acme_sh
     setup_database
     install_npanel
+    configure_sudo_permissions
     configure_nginx
     configure_supervisor
     configure_cron
