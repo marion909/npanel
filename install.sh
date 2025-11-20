@@ -140,6 +140,7 @@ install_php_versions() {
             php${version}-cli \
             php${version}-fpm \
             php${version}-mysql \
+            php${version}-sqlite3 \
             php${version}-mbstring \
             php${version}-xml \
             php${version}-curl \
@@ -235,6 +236,9 @@ install_npanel() {
     
     cd "${INSTALL_DIR}"
     
+    # Mark directory as safe for git
+    git config --global --add safe.directory "${INSTALL_DIR}"
+    
     # Install PHP dependencies
     print_status "Installing PHP dependencies..."
     composer install --no-dev --optimize-autoloader --no-interaction
@@ -252,14 +256,19 @@ install_npanel() {
         # Generate app key
         php artisan key:generate --force
         
-        # Update database credentials
-        sed -i "s/DB_DATABASE=.*/DB_DATABASE=${DB_NAME}/" .env
-        sed -i "s/DB_USERNAME=.*/DB_USERNAME=${DB_USER}/" .env
-        sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=${NPANEL_DB_PASSWORD}/" .env
+        # Update database credentials for SQLite (default)
+        sed -i "s|DB_CONNECTION=.*|DB_CONNECTION=sqlite|" .env
+        sed -i "s|DB_DATABASE=.*|DB_DATABASE=${INSTALL_DIR}/database/database.sqlite|" .env
         
         # Set queue connection to redis
         sed -i "s/QUEUE_CONNECTION=.*/QUEUE_CONNECTION=redis/" .env
     fi
+    
+    # Create SQLite database file
+    print_status "Creating SQLite database..."
+    touch "${INSTALL_DIR}/database/database.sqlite"
+    chown www-data:www-data "${INSTALL_DIR}/database/database.sqlite"
+    chmod 664 "${INSTALL_DIR}/database/database.sqlite"
     
     # Run migrations
     print_status "Running database migrations..."
@@ -271,6 +280,14 @@ install_npanel() {
     chmod -R 755 "${INSTALL_DIR}"
     chmod -R 775 "${INSTALL_DIR}/storage"
     chmod -R 775 "${INSTALL_DIR}/bootstrap/cache"
+    chmod -R 775 "${INSTALL_DIR}/database"
+    
+    # Clear all caches
+    print_status "Clearing caches..."
+    php artisan config:clear
+    php artisan cache:clear
+    php artisan route:clear
+    php artisan view:clear
     
     # Optimize Laravel
     php artisan config:cache
@@ -283,14 +300,17 @@ install_npanel() {
 configure_nginx() {
     print_status "Configuring Nginx for nPanel..."
     
-    # Prompt for domain
-    read -p "Enter domain for nPanel (e.g., panel.example.com): " PANEL_DOMAIN
+    # Prompt for domain (or use _ for any domain)
+    read -p "Enter domain for nPanel (or press Enter for any domain): " PANEL_DOMAIN
+    if [ -z "$PANEL_DOMAIN" ]; then
+        PANEL_DOMAIN="_"
+    fi
     
-    cat > "${NGINX_SITES_AVAILABLE}/npanel.conf" <<EOF
+    cat > "${NGINX_SITES_AVAILABLE}/npanel.conf" <<'EOFNGINX'
 server {
     listen 80;
-    server_name ${PANEL_DOMAIN};
-    root ${INSTALL_DIR}/public;
+    server_name PANEL_DOMAIN_PLACEHOLDER;
+    root INSTALL_DIR_PLACEHOLDER/public;
 
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";
@@ -301,7 +321,7 @@ server {
     charset utf-8;
 
     location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
+        try_files $uri $uri/ /index.php?$query_string;
     }
 
     location = /favicon.ico { access_log off; log_not_found off; }
@@ -310,8 +330,8 @@ server {
     error_page 404 /index.php;
 
     location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php${DEFAULT_PHP_VERSION}-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
+        fastcgi_pass unix:/var/run/php/phpPHP_VERSION_PLACEHOLDER-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
         include fastcgi_params;
     }
 
@@ -319,10 +339,18 @@ server {
         deny all;
     }
 }
-EOF
+EOFNGINX
+    
+    # Replace placeholders
+    sed -i "s|PANEL_DOMAIN_PLACEHOLDER|${PANEL_DOMAIN}|g" "${NGINX_SITES_AVAILABLE}/npanel.conf"
+    sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "${NGINX_SITES_AVAILABLE}/npanel.conf"
+    sed -i "s|PHP_VERSION_PLACEHOLDER|${DEFAULT_PHP_VERSION}|g" "${NGINX_SITES_AVAILABLE}/npanel.conf"
+    
+    # Remove default site
+    rm -f "${NGINX_SITES_ENABLED}/default"
     
     # Enable site
-    ln -sf "${NGINX_SITES_AVAILABLE}/npanel.conf" "${NGINX_SITES_ENABLED}/"
+    ln -sf "${NGINX_SITES_AVAILABLE}/npanel.conf" "${NGINX_SITES_ENABLED}/npanel.conf"
     
     # Test and reload Nginx
     nginx -t
