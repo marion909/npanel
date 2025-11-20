@@ -18,7 +18,7 @@ class DomainService
     ) {}
 
     /**
-     * Create a new domain with full provisioning
+     * Create a new domain with basic setup (async activation via job)
      */
     public function createDomain(User $user, array $data): Domain
     {
@@ -29,26 +29,18 @@ class DomainService
                 'domain_name' => $data['domain_name'],
                 'document_root' => $data['document_root'] ?? $this->getDefaultDocumentRoot($data['domain_name']),
                 'php_version' => $data['php_version'] ?? config('npanel.default_php_version'),
+                'ssl_enabled' => $data['ssl_enabled'] ?? false,
                 'status' => 'pending',
             ]);
 
-            // Create directory structure
+            // Create directory structure (doesn't need sudo)
             $this->createDirectoryStructure($domain);
 
             // Create default subdomains (www and @)
             $this->createDefaultSubdomains($domain);
 
-            // Create PHP-FPM pool
-            $pool = $this->phpFpmService->createPool($domain);
-            $domain->update(['php_fpm_pool' => $pool->pool_name]);
-
-            // Generate and deploy Nginx configuration
-            $nginxConfig = $this->nginxService->generateDomainConfig($domain);
-            $configPath = $this->nginxService->writeConfig($domain->domain_name, $nginxConfig);
-            $domain->update(['nginx_config_path' => $configPath]);
-
-            // Enable site
-            $this->nginxService->enableSite($domain->domain_name);
+            // Note: PHP-FPM pool and Nginx config will be created in ActivateDomainJob
+            // This requires sudo and should run async
 
             return $domain;
         });
@@ -216,6 +208,18 @@ HTML;
      */
     public function activateDomain(Domain $domain): void
     {
+        // Create PHP-FPM pool
+        $pool = $this->phpFpmService->createPool($domain);
+        $domain->update(['php_fpm_pool' => $pool->pool_name]);
+
+        // Generate and deploy Nginx configuration
+        $nginxConfig = $this->nginxService->generateDomainConfig($domain);
+        $configPath = $this->nginxService->writeConfig($domain->domain_name, $nginxConfig);
+        $domain->update(['nginx_config_path' => $configPath]);
+
+        // Enable site (creates symlink)
+        $this->nginxService->enableSite($domain->domain_name);
+
         // Test PHP-FPM config
         $phpTest = $this->phpFpmService->testConfig($domain->php_version);
         if (!$phpTest['success']) {
