@@ -87,7 +87,8 @@ class PhpFpmService
      */
     public function testConfig(string $phpVersion): array
     {
-        $phpFpmBinary = config('npanel.php_versions.' . $phpVersion);
+        $phpVersions = config('npanel.php_versions', []);
+        $phpFpmBinary = $phpVersions[$phpVersion] ?? null;
 
         if (!$phpFpmBinary) {
             throw new \Exception("PHP version {$phpVersion} is not configured");
