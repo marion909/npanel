@@ -261,6 +261,38 @@
                                 <p class="text-sm text-gray-900 font-medium">{{ editingSubdomain?.subdomain_name }}.{{ domain.domain_name }}</p>
                             </div>
                             <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Document Root</label>
+                                <div class="relative">
+                                    <select v-model="editDocumentRootType" @change="updateEditDocumentRoot"
+                                            class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2">
+                                        <option value="subdomain">Separater Subdomain-Ordner</option>
+                                        <option value="main">Hauptdomain Root</option>
+                                        <option value="subfolder">Unterordner der Hauptdomain</option>
+                                        <option value="custom">Benutzerdefiniert</option>
+                                    </select>
+                                    <div v-if="editDocumentRootType === 'subdomain'" class="text-xs text-gray-500 font-mono bg-gray-50 p-2 rounded">
+                                        {{ getEditSubdomainPath() }}
+                                    </div>
+                                    <div v-else-if="editDocumentRootType === 'main'" class="text-xs text-gray-500 font-mono bg-gray-50 p-2 rounded">
+                                        {{ domain.document_root }}
+                                    </div>
+                                    <div v-else-if="editDocumentRootType === 'subfolder'" class="space-y-2">
+                                        <input v-model="editSubfolderName" type="text" 
+                                               placeholder="Unterordner (z.B. blog, shop)"
+                                               class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md" />
+                                        <div class="text-xs text-gray-500 font-mono bg-gray-50 p-2 rounded">
+                                            {{ domain.document_root }}/{{ editSubfolderName || 'unterordner' }}
+                                        </div>
+                                    </div>
+                                    <div v-else-if="editDocumentRootType === 'custom'" class="space-y-2">
+                                        <input v-model="editingSubdomain.document_root" type="text" 
+                                               placeholder="Vollständiger Pfad"
+                                               class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md font-mono" />
+                                        <p class="text-xs text-gray-500">Aktuell: {{ editingSubdomain.document_root }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">PHP Version</label>
                                 <select v-model="editingSubdomain.php_version" 
                                         class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md">
@@ -302,6 +334,8 @@ const showAddSubdomainModal = ref(false);
 const showEditSubdomainModal = ref(false);
 const documentRootType = ref('subdomain');
 const subfolderName = ref('');
+const editDocumentRootType = ref('custom');
+const editSubfolderName = ref('');
 const newSubdomain = ref({
     subdomain_name: '',
     php_version: props.domain.php_version || '8.3',
@@ -352,6 +386,11 @@ const getSubdomainPath = () => {
     return `${baseDir}/subdomains/${newSubdomain.value.subdomain_name || 'subdomain'}`;
 };
 
+const getEditSubdomainPath = () => {
+    const baseDir = props.domain.document_root.split('/public_html')[0];
+    return `${baseDir}/subdomains/${editingSubdomain.value?.subdomain_name || 'subdomain'}`;
+};
+
 const updateDocumentRoot = () => {
     if (documentRootType.value === 'subdomain') {
         newSubdomain.value.document_root = '';
@@ -361,6 +400,18 @@ const updateDocumentRoot = () => {
         subfolderName.value = '';
         newSubdomain.value.document_root = '';
     }
+};
+
+const updateEditDocumentRoot = () => {
+    if (editDocumentRootType.value === 'subdomain') {
+        const baseDir = props.domain.document_root.split('/public_html')[0];
+        editingSubdomain.value.document_root = `${baseDir}/subdomains/${editingSubdomain.value.subdomain_name}`;
+    } else if (editDocumentRootType.value === 'main') {
+        editingSubdomain.value.document_root = props.domain.document_root;
+    } else if (editDocumentRootType.value === 'subfolder') {
+        editSubfolderName.value = '';
+    }
+    // 'custom' does nothing, user can type freely
 };
 
 const issueSSL = () => {
@@ -403,18 +454,28 @@ const addSubdomain = () => {
 
 const editSubdomain = (subdomain) => {
     editingSubdomain.value = { ...subdomain };
+    editDocumentRootType.value = 'custom';
+    editSubfolderName.value = '';
     showEditSubdomainModal.value = true;
 };
 
 const updateSubdomain = () => {
     if (!editingSubdomain.value) return;
     
+    // Set document root based on type
+    if (editDocumentRootType.value === 'subfolder' && editSubfolderName.value) {
+        editingSubdomain.value.document_root = `${props.domain.document_root}/${editSubfolderName.value}`;
+    }
+    
     router.put(`/domains/${props.domain.id}/subdomains/${editingSubdomain.value.id}`, {
         php_version: editingSubdomain.value.php_version,
+        document_root: editingSubdomain.value.document_root,
     }, {
         onSuccess: () => {
             showEditSubdomainModal.value = false;
             editingSubdomain.value = null;
+            editDocumentRootType.value = 'custom';
+            editSubfolderName.value = '';
         },
         onError: (errors) => {
             alert('Failed to update subdomain: ' + Object.values(errors).join(', '));

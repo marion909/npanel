@@ -129,8 +129,14 @@ HTML;
     public function updateSubdomain(Subdomain $subdomain, array $data): Subdomain
     {
         $oldPhpVersion = $subdomain->php_version;
+        $oldDocumentRoot = $subdomain->document_root;
 
         $subdomain->update($data);
+
+        // If document_root changed, ensure directory exists
+        if (isset($data['document_root']) && $data['document_root'] !== $oldDocumentRoot) {
+            $this->createDirectoryStructure($subdomain);
+        }
 
         // Regenerate Nginx config
         $nginxConfig = $this->nginxService->generateSubdomainConfig($subdomain);
