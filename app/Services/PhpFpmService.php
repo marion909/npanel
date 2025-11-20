@@ -67,7 +67,7 @@ class PhpFpmService
      */
     public function generatePoolConfig(PhpFpmPool $pool, Domain $domain): string
     {
-        return View::make('templates/php-fpm/pool', [
+        return View::make('templates/php-fpm/pool.conf', [
             'pool' => $pool,
             'domain' => $domain,
         ])->render();

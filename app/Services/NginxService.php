@@ -28,7 +28,7 @@ class NginxService
             ? $domain->phpFpmPool->socket_path
             : config('npanel.php_fpm_socket_dir') . '/php' . $domain->php_version . '-fpm-' . Str::slug($domain->domain_name) . '.sock';
 
-        return View::make('templates/nginx/domain', [
+        return View::make('templates/nginx/domain.conf', [
             'domain' => $domain,
             'phpFpmSocket' => $phpFpmSocket,
         ])->render();
@@ -53,7 +53,7 @@ class NginxService
             . ($subdomain->php_version ?? $parentDomain->php_version) 
             . '-fpm-' . Str::slug($subdomain->full_domain) . '.sock';
 
-        return View::make('templates/nginx/subdomain', [
+        return View::make('templates/nginx/subdomain.conf', [
             'subdomain' => $subdomain,
             'sslCertPath' => $sslCertPath,
             'sslKeyPath' => $sslKeyPath,
