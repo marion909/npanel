@@ -73,7 +73,18 @@ class NginxService
             $this->backupConfig($configPath);
         }
 
-        File::put($configPath, $content);
+        // Write to temp file first
+        $tempPath = sys_get_temp_dir() . '/' . $domainName . '.conf';
+        File::put($tempPath, $content);
+
+        // Move with sudo
+        $escapedTemp = escapeshellarg($tempPath);
+        $escapedTarget = escapeshellarg($configPath);
+        exec("sudo mv {$escapedTemp} {$escapedTarget}", $output, $returnVar);
+
+        if ($returnVar !== 0) {
+            throw new \Exception("Failed to write nginx config: " . implode("\n", $output));
+        }
 
         return $configPath;
     }
@@ -90,12 +101,17 @@ class NginxService
             throw new \Exception("Configuration file does not exist: {$source}");
         }
 
-        // Remove existing symlink if present
+        // Remove existing symlink if present and create new one with sudo
+        $escapedSource = escapeshellarg($source);
+        $escapedTarget = escapeshellarg($target);
+        
         if (File::exists($target)) {
-            File::delete($target);
+            exec("sudo rm -f {$escapedTarget}");
         }
 
-        return symlink($source, $target);
+        exec("sudo ln -sf {$escapedSource} {$escapedTarget}", $output, $returnVar);
+        
+        return $returnVar === 0;
     }
 
     /**
@@ -106,7 +122,9 @@ class NginxService
         $target = $this->sitesEnabled . '/' . $domainName . '.conf';
 
         if (File::exists($target)) {
-            return File::delete($target);
+            $escapedTarget = escapeshellarg($target);
+            exec("sudo rm -f {$escapedTarget}", $output, $returnVar);
+            return $returnVar === 0;
         }
 
         return true;
@@ -168,7 +186,9 @@ class NginxService
     protected function backupConfig(string $configPath): void
     {
         $backupPath = $configPath . '.backup.' . now()->format('YmdHis');
-        File::copy($configPath, $backupPath);
+        $escapedSource = escapeshellarg($configPath);
+        $escapedBackup = escapeshellarg($backupPath);
+        exec("sudo cp {$escapedSource} {$escapedBackup}");
 
         // Cleanup old backups
         $this->cleanupOldBackups($configPath);
@@ -191,7 +211,8 @@ class NginxService
             // Remove oldest backups
             $toRemove = array_slice($backups, 0, count($backups) - $retention);
             foreach ($toRemove as $file) {
-                File::delete($file);
+                $escapedFile = escapeshellarg($file);
+                exec("sudo rm -f {$escapedFile}");
             }
         }
     }
@@ -207,7 +228,9 @@ class NginxService
         // Remove config file
         $configPath = $this->sitesAvailable . '/' . $domainName . '.conf';
         if (File::exists($configPath)) {
-            return File::delete($configPath);
+            $escapedPath = escapeshellarg($configPath);
+            exec("sudo rm -f {$escapedPath}", $output, $returnVar);
+            return $returnVar === 0;
         }
 
         return true;
