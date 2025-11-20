@@ -22,8 +22,8 @@ return [
     */
     'nginx_sites_available' => env('NGINX_SITES_AVAILABLE', '/etc/nginx/sites-available'),
     'nginx_sites_enabled' => env('NGINX_SITES_ENABLED', '/etc/nginx/sites-enabled'),
-    'nginx_config_test_command' => 'nginx -t',
-    'nginx_reload_command' => 'systemctl reload nginx',
+    'nginx_config_test_command' => 'sudo nginx -t',
+    'nginx_reload_command' => 'sudo systemctl reload nginx',
 
     /*
     |--------------------------------------------------------------------------
@@ -43,7 +43,7 @@ return [
     'default_php_version' => env('NPANEL_DEFAULT_PHP_VERSION', '8.3'),
     'php_fpm_pool_dir' => '/etc/php/{version}/fpm/pool.d',
     'php_fpm_socket_dir' => '/var/run/php',
-    'php_fpm_reload_command' => 'systemctl reload php{version}-fpm',
+    'php_fpm_reload_command' => 'sudo systemctl reload php{version}-fpm',
 
     /*
     |--------------------------------------------------------------------------

@@ -123,9 +123,16 @@ class NginxService
 
         exec($command . ' 2>&1', $output, $returnCode);
 
+        $outputString = implode("\n", $output);
+        
+        // Check if there's a real error (not just warnings)
+        // nginx -t returns 0 on success, even with warnings
+        // Only fail if there's an actual error line containing "emerg" or "error:"
+        $hasError = (preg_match('/\[emerg\]|\[error\]|test failed/i', $outputString) && $returnCode !== 0);
+
         return [
-            'success' => $returnCode === 0,
-            'output' => implode("\n", $output),
+            'success' => !$hasError,
+            'output' => $outputString,
             'return_code' => $returnCode,
         ];
     }
