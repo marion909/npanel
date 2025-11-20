@@ -239,27 +239,37 @@ class FileManagerController extends Controller
     private function getFullPath(Domain $domain, string $relativePath): string
     {
         $relativePath = trim($relativePath, '/');
-        return rtrim($domain->document_root, '/') . ($relativePath ? '/' . $relativePath : '');
+        $baseDir = $this->getBaseDomainPath($domain);
+        return rtrim($baseDir, '/') . ($relativePath ? '/' . $relativePath : '');
     }
 
     /**
-     * Get relative path from document root
+     * Get relative path from domain base directory
      */
     private function getRelativePath(Domain $domain, string $fullPath): string
     {
-        $documentRoot = rtrim($domain->document_root, '/');
-        return trim(str_replace($documentRoot, '', $fullPath), '/');
+        $baseDir = rtrim($this->getBaseDomainPath($domain), '/');
+        return trim(str_replace($baseDir, '', $fullPath), '/');
     }
 
     /**
-     * Check if path is within document root (security check)
+     * Get base domain directory (parent of public_html)
+     */
+    private function getBaseDomainPath(Domain $domain): string
+    {
+        // Extract base path: /home/www-data/domains/domain.com from /home/www-data/domains/domain.com/public_html
+        return dirname($domain->document_root);
+    }
+
+    /**
+     * Check if path is within domain directory (security check)
      */
     private function isPathSafe(Domain $domain, string $fullPath): bool
     {
-        $documentRoot = realpath($domain->document_root);
+        $baseDir = realpath($this->getBaseDomainPath($domain));
         $targetPath = realpath($fullPath) ?: $fullPath; // realpath returns false if doesn't exist
         
-        return Str::startsWith($targetPath, $documentRoot);
+        return Str::startsWith($targetPath, $baseDir);
     }
 
     /**
