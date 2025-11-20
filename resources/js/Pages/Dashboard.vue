@@ -248,7 +248,11 @@ const createDomain = async () => {
         router.reload();
     } catch (error) {
         console.error('Error creating domain:', error);
-        alert(error.response?.data?.message || 'Failed to create domain');
+        if (error.response?.status === 419) {
+            alert('Session expired. Please refresh the page (Ctrl+F5) and try again.');
+        } else {
+            alert(error.response?.data?.message || 'Failed to create domain: ' + error.message);
+        }
     }
 };
 
