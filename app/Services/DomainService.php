@@ -283,10 +283,8 @@ HTML;
         // Update domain status
         $domain->update(['status' => 'active']);
 
-        // Trigger SSL certificate issuance if enabled
-        if ($domain->ssl_enabled) {
-            $this->sslService->issueCertificate($domain);
-        }
+        // Note: SSL certificate should be issued manually via the "Issue SSL" button
+        // to avoid Let's Encrypt rate limits
     }
 
     /**
