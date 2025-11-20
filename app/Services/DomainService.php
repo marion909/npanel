@@ -226,26 +226,9 @@ HTML;
                 $domain->delete();
             });
             
-            // Reload services AFTER successful deletion (outside transaction)
-            // This prevents rollback if reload fails
-            try {
-                $this->nginxService->reload();
-            } catch (\Exception $e) {
-                \Log::warning('Nginx reload failed after domain deletion', [
-                    'error' => $e->getMessage()
-                ]);
-            }
-            
-            try {
-                if ($phpVersion) {
-                    $this->phpFpmService->reload($phpVersion);
-                }
-            } catch (\Exception $e) {
-                \Log::warning('PHP-FPM reload failed after domain deletion', [
-                    'php_version' => $phpVersion,
-                    'error' => $e->getMessage()
-                ]);
-            }
+            // Reload services asynchronously to avoid killing the current request
+            \App\Jobs\ReloadServicesJob::dispatch($phpVersion, true, true)
+                ->delay(now()->addSeconds(3));
             
             return true;
         } catch (\Exception $e) {
