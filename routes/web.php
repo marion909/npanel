@@ -26,6 +26,11 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/domains/{domain}', [App\Http\Controllers\DomainController::class, 'destroy'])->name('domains.destroy');
     Route::post('/domains/{domain}/ssl', [App\Http\Controllers\DomainController::class, 'issueSSL'])->name('domains.ssl');
     
+    // Subdomain management
+    Route::post('/domains/{domain}/subdomains', [App\Http\Controllers\SubdomainController::class, 'store'])->name('subdomains.store');
+    Route::put('/domains/{domain}/subdomains/{subdomain}', [App\Http\Controllers\SubdomainController::class, 'update'])->name('subdomains.update');
+    Route::delete('/domains/{domain}/subdomains/{subdomain}', [App\Http\Controllers\SubdomainController::class, 'destroy'])->name('subdomains.destroy');
+    
     // File Manager
     Route::get('/domains/{domain}/files', [App\Http\Controllers\FileManagerController::class, 'index'])->name('domains.files');
     Route::get('/domains/{domain}/files/download', [App\Http\Controllers\FileManagerController::class, 'download'])->name('domains.files.download');

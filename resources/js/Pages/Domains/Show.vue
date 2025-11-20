@@ -138,7 +138,7 @@
                     <div class="p-6">
                         <div class="flex justify-between items-center mb-4">
                             <h3 class="text-lg font-semibold text-gray-900">Subdomains</h3>
-                            <button class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm">
+                            <button @click="showAddSubdomainModal = true" class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm">
                                 Add Subdomain
                             </button>
                         </div>
@@ -160,8 +160,10 @@
                                         </div>
                                     </div>
                                     <div class="flex space-x-2">
-                                        <button class="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
-                                        <button class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                                        <button @click="editSubdomain(subdomain)" class="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
+                                        <button v-if="!['www', '@'].includes(subdomain.subdomain_name)" 
+                                                @click="deleteSubdomain(subdomain)" 
+                                                class="text-red-600 hover:text-red-800 text-sm">Delete</button>
                                     </div>
                                 </div>
                             </div>
@@ -174,17 +176,110 @@
                 </div>
             </div>
         </div>
+
+        <!-- Add Subdomain Modal -->
+        <div v-if="showAddSubdomainModal" class="fixed z-10 inset-0 overflow-y-auto">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showAddSubdomainModal = false"></div>
+                <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Add Subdomain</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Subdomain Name</label>
+                                <div class="flex items-center">
+                                    <input v-model="newSubdomain.subdomain_name" type="text" 
+                                           placeholder="blog, shop, api, etc."
+                                           class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-l-md" />
+                                    <span class="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 bg-gray-50 text-gray-500 text-sm rounded-r-md">
+                                        .{{ domain.domain_name }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">PHP Version</label>
+                                <select v-model="newSubdomain.php_version" 
+                                        class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md">
+                                    <option value="7.4">PHP 7.4</option>
+                                    <option value="8.0">PHP 8.0</option>
+                                    <option value="8.1">PHP 8.1</option>
+                                    <option value="8.2">PHP 8.2</option>
+                                    <option value="8.3">PHP 8.3</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button @click="addSubdomain" :disabled="!newSubdomain.subdomain_name"
+                                class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+                            Create
+                        </button>
+                        <button @click="showAddSubdomainModal = false" type="button"
+                                class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Subdomain Modal -->
+        <div v-if="showEditSubdomainModal" class="fixed z-10 inset-0 overflow-y-auto">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showEditSubdomainModal = false"></div>
+                <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Edit Subdomain</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Subdomain</label>
+                                <p class="text-sm text-gray-900 font-medium">{{ editingSubdomain?.subdomain_name }}.{{ domain.domain_name }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">PHP Version</label>
+                                <select v-model="editingSubdomain.php_version" 
+                                        class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md">
+                                    <option value="7.4">PHP 7.4</option>
+                                    <option value="8.0">PHP 8.0</option>
+                                    <option value="8.1">PHP 8.1</option>
+                                    <option value="8.2">PHP 8.2</option>
+                                    <option value="8.3">PHP 8.3</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button @click="updateSubdomain"
+                                class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                            Update
+                        </button>
+                        <button @click="showEditSubdomainModal = false" type="button"
+                                class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </AppLayout>
 </template>
 
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({
     domain: Object
 });
+
+const showAddSubdomainModal = ref(false);
+const showEditSubdomainModal = ref(false);
+const newSubdomain = ref({
+    subdomain_name: '',
+    php_version: props.domain.php_version || '8.3',
+});
+const editingSubdomain = ref(null);
 
 const statusClass = computed(() => {
     const status = props.domain.status;
@@ -232,6 +327,57 @@ const issueSSL = () => {
             },
             onError: (errors) => {
                 alert('Failed to issue SSL: ' + Object.values(errors).join(', '));
+            }
+        });
+    }
+};
+
+const addSubdomain = () => {
+    if (!newSubdomain.value.subdomain_name) return;
+    
+    router.post(`/domains/${props.domain.id}/subdomains`, newSubdomain.value, {
+        onSuccess: () => {
+            showAddSubdomainModal.value = false;
+            newSubdomain.value = {
+                subdomain_name: '',
+                php_version: props.domain.php_version || '8.3',
+            };
+        },
+        onError: (errors) => {
+            alert('Failed to create subdomain: ' + Object.values(errors).join(', '));
+        }
+    });
+};
+
+const editSubdomain = (subdomain) => {
+    editingSubdomain.value = { ...subdomain };
+    showEditSubdomainModal.value = true;
+};
+
+const updateSubdomain = () => {
+    if (!editingSubdomain.value) return;
+    
+    router.put(`/domains/${props.domain.id}/subdomains/${editingSubdomain.value.id}`, {
+        php_version: editingSubdomain.value.php_version,
+    }, {
+        onSuccess: () => {
+            showEditSubdomainModal.value = false;
+            editingSubdomain.value = null;
+        },
+        onError: (errors) => {
+            alert('Failed to update subdomain: ' + Object.values(errors).join(', '));
+        }
+    });
+};
+
+const deleteSubdomain = (subdomain) => {
+    if (confirm(`Are you sure you want to delete ${subdomain.subdomain_name}.${props.domain.domain_name}? This action cannot be undone.`)) {
+        router.delete(`/domains/${props.domain.id}/subdomains/${subdomain.id}`, {
+            onSuccess: () => {
+                // Success message handled by controller
+            },
+            onError: (errors) => {
+                alert('Failed to delete subdomain: ' + Object.values(errors).join(', '));
             }
         });
     }

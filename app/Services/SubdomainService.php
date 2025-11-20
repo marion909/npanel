@@ -19,13 +19,17 @@ class SubdomainService
      */
     public function createSubdomain(Domain $parentDomain, array $data): Subdomain
     {
-        $subdomain = Subdomain::create([
-            'parent_domain_id' => $parentDomain->id,
-            'subdomain_name' => $data['subdomain_name'],
-            'document_root' => $data['document_root'] ?? $this->getDefaultDocumentRoot($parentDomain, $data['subdomain_name']),
-            'php_version' => $data['php_version'] ?? $parentDomain->php_version,
-            'ssl_enabled' => $data['ssl_enabled'] ?? false,
-        ]);
+        $subdomain = Subdomain::firstOrCreate(
+            [
+                'parent_domain_id' => $parentDomain->id,
+                'subdomain_name' => $data['subdomain_name'],
+            ],
+            [
+                'document_root' => $data['document_root'] ?? $this->getDefaultDocumentRoot($parentDomain, $data['subdomain_name']),
+                'php_version' => $data['php_version'] ?? $parentDomain->php_version,
+                'ssl_enabled' => $data['ssl_enabled'] ?? false,
+            ]
+        );
 
         // Create directory structure
         $this->createDirectoryStructure($subdomain);
@@ -42,6 +46,9 @@ class SubdomainService
         if ($subdomain->php_version !== $parentDomain->php_version) {
             $this->createPhpFpmPool($subdomain, $parentDomain);
         }
+
+        // Dispatch async reload job
+        \App\Jobs\ReloadServicesJob::dispatch([$subdomain->php_version], 2);
 
         return $subdomain;
     }
@@ -63,6 +70,9 @@ class SubdomainService
         if (!File::exists($subdomain->document_root)) {
             File::makeDirectory($subdomain->document_root, 0755, true);
         }
+
+        // Set ownership to www-data
+        exec("sudo chown -R www-data:www-data " . escapeshellarg($subdomain->document_root));
 
         // Create default index.html
         $indexPath = $subdomain->document_root . '/index.html';
@@ -121,12 +131,8 @@ HTML;
         $nginxConfig = $this->nginxService->generateSubdomainConfig($subdomain);
         $this->nginxService->writeConfig($subdomain->full_domain, $nginxConfig);
 
-        // Handle PHP version change
-        if (isset($data['php_version']) && $data['php_version'] !== $oldPhpVersion) {
-            // Reload both PHP-FPM services
-            $this->phpFpmService->reload($oldPhpVersion);
-            $this->phpFpmService->reload($subdomain->php_version);
-        }
+        // Dispatch async reload job
+        \App\Jobs\ReloadServicesJob::dispatch($oldPhpVersion !== $subdomain->php_version ? [$oldPhpVersion, $subdomain->php_version] : null, 2);
 
         return $subdomain->fresh();
     }
@@ -136,11 +142,18 @@ HTML;
      */
     public function deleteSubdomain(Subdomain $subdomain): bool
     {
+        $phpVersion = $subdomain->php_version;
+        
         // Remove Nginx config
         $this->nginxService->removeConfig($subdomain->full_domain);
 
         // Delete subdomain record
-        return $subdomain->delete();
+        $result = $subdomain->delete();
+
+        // Dispatch async reload job
+        \App\Jobs\ReloadServicesJob::dispatch([$phpVersion], 2);
+
+        return $result;
     }
 
     /**
