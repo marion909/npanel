@@ -19,10 +19,15 @@ class ReloadServicesJob implements ShouldQueue
      * Create a new job instance.
      */
     public function __construct(
-        public ?string $phpVersion = null,
+        public string|array|null $phpVersions = null,
         public bool $reloadNginx = true,
         public bool $reloadPhpFpm = true
-    ) {}
+    ) {
+        // Normalize to array
+        if (is_string($this->phpVersions)) {
+            $this->phpVersions = [$this->phpVersions];
+        }
+    }
 
     /**
      * Execute the job.
@@ -44,15 +49,19 @@ class ReloadServicesJob implements ShouldQueue
         }
 
         try {
-            if ($this->reloadPhpFpm && $this->phpVersion) {
-                $phpFpmService->reload($this->phpVersion);
-                Log::info('PHP-FPM reloaded successfully', [
-                    'php_version' => $this->phpVersion
-                ]);
+            if ($this->reloadPhpFpm && $this->phpVersions) {
+                foreach ((array)$this->phpVersions as $version) {
+                    if ($version) {
+                        $phpFpmService->reload($version);
+                        Log::info('PHP-FPM reloaded successfully', [
+                            'php_version' => $version
+                        ]);
+                    }
+                }
             }
         } catch (\Exception $e) {
             Log::warning('PHP-FPM reload failed', [
-                'php_version' => $this->phpVersion,
+                'php_versions' => $this->phpVersions,
                 'error' => $e->getMessage()
             ]);
         }
