@@ -52,4 +52,33 @@ class DomainController extends Controller
             return Redirect::back()->with('error', 'Failed to create domain: ' . $e->getMessage())->withInput();
         }
     }
+
+    /**
+     * Display the specified domain
+     */
+    public function show(Domain $domain)
+    {
+        // Load relationships
+        $domain->load(['subdomains', 'sslCertificate']);
+
+        return inertia('Domains/Show', [
+            'domain' => $domain,
+        ]);
+    }
+
+    /**
+     * Remove the specified domain
+     */
+    public function destroy(Domain $domain): RedirectResponse
+    {
+        try {
+            // Delete the domain (this will also trigger cleanup in the service)
+            $this->domainService->deleteDomain($domain);
+
+            return Redirect::route('dashboard')->with('success', 'Domain deleted successfully.');
+        } catch (\Exception $e) {
+            \Log::error('Domain deletion failed', ['domain' => $domain->domain_name, 'error' => $e->getMessage()]);
+            return Redirect::back()->with('error', 'Failed to delete domain: ' . $e->getMessage());
+        }
+    }
 }

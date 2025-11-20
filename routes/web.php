@@ -22,4 +22,6 @@ Route::middleware(['auth'])->group(function () {
     
     // Domain management
     Route::post('/domains', [App\Http\Controllers\DomainController::class, 'store'])->name('domains.store');
+    Route::get('/domains/{domain}', [App\Http\Controllers\DomainController::class, 'show'])->name('domains.show');
+    Route::delete('/domains/{domain}', [App\Http\Controllers\DomainController::class, 'destroy'])->name('domains.destroy');
 });

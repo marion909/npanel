@@ -182,27 +182,63 @@ HTML;
     }
 
     /**
-     * Delete domain and cleanup resources
+     * Delete domain and all associated resources
      */
     public function deleteDomain(Domain $domain): bool
     {
-        return DB::transaction(function () use ($domain) {
-            // Remove Nginx config
-            $this->nginxService->removeConfig($domain->domain_name);
+        try {
+            DB::transaction(function () use ($domain) {
+                // Remove Nginx configuration files
+                $configPath = config('npanel.nginx_sites_available') . '/' . $domain->domain_name . '.conf';
+                $enabledPath = config('npanel.nginx_sites_enabled') . '/' . $domain->domain_name . '.conf';
+                
+                if (File::exists($enabledPath)) {
+                    File::delete($enabledPath);
+                }
+                if (File::exists($configPath)) {
+                    File::delete($configPath);
+                }
 
-            // Remove PHP-FPM pool
-            if ($domain->phpFpmPool) {
-                $this->phpFpmService->removePool($domain->phpFpmPool);
-            }
+                // Remove PHP-FPM pool configuration
+                if ($domain->php_fpm_pool) {
+                    $poolConfigPath = '/etc/php/' . $domain->php_version . '/fpm/pool.d/' . $domain->php_fpm_pool . '.conf';
+                    if (File::exists($poolConfigPath)) {
+                        File::delete($poolConfigPath);
+                    }
+                }
 
-            // Mark as deleted (soft delete approach)
-            $domain->update(['status' => 'deleted']);
+                // Delete subdomains first (foreign key constraint)
+                $domain->subdomains()->delete();
 
-            // Optionally: Remove directory structure (be careful!)
-            // $this->removeDirectoryStructure($domain);
+                // Delete SSL certificate record
+                if ($domain->sslCertificate) {
+                    $domain->sslCertificate->delete();
+                }
 
+                // Delete PHP-FPM pool record
+                if ($domain->phpFpmPool) {
+                    $domain->phpFpmPool->delete();
+                }
+
+                // Hard delete domain record
+                $domain->delete();
+
+                // Reload services
+                $this->nginxService->reload();
+                if ($domain->php_version) {
+                    $this->phpFpmService->reload($domain->php_version);
+                }
+            });
+            
             return true;
-        });
+        } catch (\Exception $e) {
+            \Log::error('Failed to delete domain', [
+                'domain' => $domain->domain_name,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
     }
 
     /**
