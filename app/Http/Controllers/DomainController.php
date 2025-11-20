@@ -27,7 +27,7 @@ class DomainController extends Controller
             'domain_name' => ['required', 'string', 'regex:/^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/i', 'unique:domains,domain_name'],
             'document_root' => ['nullable', 'string', 'max:512'],
             'php_version' => ['nullable', 'string', 'in:7.4,8.0,8.1,8.2,8.3'],
-            'ssl_enabled' => ['boolean'],
+            'ssl_enabled' => ['nullable', 'boolean'],
         ]);
 
         if ($validator->fails()) {
@@ -46,9 +46,10 @@ class DomainController extends Controller
                 IssueSslCertificateJob::dispatch($domain)->delay(now()->addMinutes(1));
             }
 
-            return Redirect::back()->with('success', 'Domain created successfully. Activation in progress.');
+            return Redirect::route('dashboard')->with('success', 'Domain created successfully. Activation in progress.');
         } catch (\Exception $e) {
-            return Redirect::back()->with('error', 'Failed to create domain: ' . $e->getMessage());
+            \Log::error('Domain creation failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            return Redirect::back()->with('error', 'Failed to create domain: ' . $e->getMessage())->withInput();
         }
     }
 }
