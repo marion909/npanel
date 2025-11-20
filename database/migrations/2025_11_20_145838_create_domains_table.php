@@ -23,7 +23,7 @@ return new class extends Migration
             $table->string('ssl_cert_path', 512)->nullable();
             $table->string('ssl_key_path', 512)->nullable();
             $table->timestamp('ssl_expiry_date')->nullable();
-            $table->enum('status', ['pending', 'active', 'suspended', 'deleted'])->default('pending');
+            $table->enum('status', ['pending', 'active', 'suspended', 'deleted', 'failed'])->default('pending');
             $table->timestamps();
 
             $table->index('user_id');
