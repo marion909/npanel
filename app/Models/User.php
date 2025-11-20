@@ -44,4 +44,12 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    /**
+     * Get the domains for the user.
+     */
+    public function domains()
+    {
+        return $this->hasMany(Domain::class);
+    }
 }
