@@ -73,6 +73,9 @@ class DomainService
             }
         }
 
+        // Set ownership to www-data
+        exec("sudo chown -R www-data:www-data " . escapeshellarg($baseDir));
+
         // Create default index.html
         $indexPath = $domain->document_root . '/index.html';
         if (!File::exists($indexPath)) {
