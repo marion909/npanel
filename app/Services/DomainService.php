@@ -114,23 +114,31 @@ HTML;
     {
         $baseDir = dirname($domain->document_root);
 
-        // Create 'www' subdomain
-        Subdomain::create([
-            'parent_domain_id' => $domain->id,
-            'subdomain_name' => 'www',
-            'document_root' => $domain->document_root, // Point to same root as main domain
-            'php_version' => $domain->php_version,
-            'ssl_enabled' => false,
-        ]);
+        // Create 'www' subdomain if it doesn't exist
+        Subdomain::firstOrCreate(
+            [
+                'parent_domain_id' => $domain->id,
+                'subdomain_name' => 'www',
+            ],
+            [
+                'document_root' => $domain->document_root, // Point to same root as main domain
+                'php_version' => $domain->php_version,
+                'ssl_enabled' => false,
+            ]
+        );
 
-        // Create '@' subdomain (apex/root domain)
-        Subdomain::create([
-            'parent_domain_id' => $domain->id,
-            'subdomain_name' => '@',
-            'document_root' => $domain->document_root, // Point to same root as main domain
-            'php_version' => $domain->php_version,
-            'ssl_enabled' => false,
-        ]);
+        // Create '@' subdomain (apex/root domain) if it doesn't exist
+        Subdomain::firstOrCreate(
+            [
+                'parent_domain_id' => $domain->id,
+                'subdomain_name' => '@',
+            ],
+            [
+                'document_root' => $domain->document_root, // Point to same root as main domain
+                'php_version' => $domain->php_version,
+                'ssl_enabled' => false,
+            ]
+        );
     }
 
     /**
