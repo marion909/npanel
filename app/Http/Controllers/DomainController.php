@@ -81,4 +81,30 @@ class DomainController extends Controller
             return Redirect::back()->with('error', 'Failed to delete domain: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Issue SSL certificate for domain
+     */
+    public function issueSSL(Domain $domain): RedirectResponse
+    {
+        try {
+            // Check if domain is active
+            if ($domain->status !== 'active') {
+                return Redirect::back()->with('error', 'Domain must be active before issuing SSL certificate.');
+            }
+
+            // Check if SSL already enabled
+            if ($domain->ssl_enabled) {
+                return Redirect::back()->with('info', 'SSL is already enabled for this domain.');
+            }
+
+            // Dispatch SSL issuance job
+            IssueSslCertificateJob::dispatch($domain);
+
+            return Redirect::back()->with('success', 'SSL certificate issuance started. This may take a few minutes.');
+        } catch (\Exception $e) {
+            \Log::error('SSL issuance failed', ['domain' => $domain->domain_name, 'error' => $e->getMessage()]);
+            return Redirect::back()->with('error', 'Failed to issue SSL: ' . $e->getMessage());
+        }
+    }
 }

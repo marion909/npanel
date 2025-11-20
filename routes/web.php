@@ -24,4 +24,5 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/domains', [App\Http\Controllers\DomainController::class, 'store'])->name('domains.store');
     Route::get('/domains/{domain}', [App\Http\Controllers\DomainController::class, 'show'])->name('domains.show');
     Route::delete('/domains/{domain}', [App\Http\Controllers\DomainController::class, 'destroy'])->name('domains.destroy');
+    Route::post('/domains/{domain}/ssl', [App\Http\Controllers\DomainController::class, 'issueSSL'])->name('domains.ssl');
 });

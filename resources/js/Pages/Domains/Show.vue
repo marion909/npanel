@@ -23,6 +23,14 @@
                                 </div>
                             </div>
                             <div class="flex space-x-3">
+                                <button v-if="!domain.ssl_enabled && domain.status === 'active'" 
+                                        @click="issueSSL" 
+                                        class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center">
+                                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                    </svg>
+                                    Issue SSL
+                                </button>
                                 <Link :href="`/domains/${domain.id}/edit`" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
                                     Edit
                                 </Link>
@@ -199,6 +207,19 @@ const confirmDelete = () => {
             },
             onError: (errors) => {
                 alert('Failed to delete domain: ' + Object.values(errors).join(', '));
+            }
+        });
+    }
+};
+
+const issueSSL = () => {
+    if (confirm(`Issue SSL certificate for ${props.domain.domain_name}? This will request a free Let's Encrypt certificate.`)) {
+        router.post(`/domains/${props.domain.id}/ssl`, {}, {
+            onSuccess: () => {
+                // Success message handled by controller
+            },
+            onError: (errors) => {
+                alert('Failed to issue SSL: ' + Object.values(errors).join(', '));
             }
         });
     }
