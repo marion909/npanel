@@ -33,14 +33,8 @@ class DomainService
                 'status' => 'pending',
             ]);
 
-            // Create directory structure (doesn't need sudo)
-            $this->createDirectoryStructure($domain);
-
-            // Create default subdomains (www and @)
-            $this->createDefaultSubdomains($domain);
-
-            // Note: PHP-FPM pool and Nginx config will be created in ActivateDomainJob
-            // This requires sudo and should run async
+            // Note: Directory creation, PHP-FPM pool, Nginx config, and subdomains
+            // will be created in ActivateDomainJob (requires sudo, runs async)
 
             return $domain;
         });
@@ -208,6 +202,12 @@ HTML;
      */
     public function activateDomain(Domain $domain): void
     {
+        // Create directory structure (with sudo)
+        $this->createDirectoryStructure($domain);
+
+        // Create default subdomains (www and @)
+        $this->createDefaultSubdomains($domain);
+
         // Create PHP-FPM pool
         $pool = $this->phpFpmService->createPool($domain);
         $domain->update(['php_fpm_pool' => $pool->pool_name]);
