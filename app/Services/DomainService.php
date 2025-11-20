@@ -186,6 +186,8 @@ HTML;
      */
     public function deleteDomain(Domain $domain): bool
     {
+        $phpVersion = $domain->php_version;
+        
         try {
             DB::transaction(function () use ($domain) {
                 // Remove Nginx configuration files
@@ -222,13 +224,28 @@ HTML;
 
                 // Hard delete domain record
                 $domain->delete();
-
-                // Reload services
-                $this->nginxService->reload();
-                if ($domain->php_version) {
-                    $this->phpFpmService->reload($domain->php_version);
-                }
             });
+            
+            // Reload services AFTER successful deletion (outside transaction)
+            // This prevents rollback if reload fails
+            try {
+                $this->nginxService->reload();
+            } catch (\Exception $e) {
+                \Log::warning('Nginx reload failed after domain deletion', [
+                    'error' => $e->getMessage()
+                ]);
+            }
+            
+            try {
+                if ($phpVersion) {
+                    $this->phpFpmService->reload($phpVersion);
+                }
+            } catch (\Exception $e) {
+                \Log::warning('PHP-FPM reload failed after domain deletion', [
+                    'php_version' => $phpVersion,
+                    'error' => $e->getMessage()
+                ]);
+            }
             
             return true;
         } catch (\Exception $e) {
