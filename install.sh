@@ -297,16 +297,28 @@ install_npanel() {
     print_success "nPanel installed"
 }
 
+get_server_ip() {
+    # Try to get public IP
+    SERVER_IP=$(curl -s ifconfig.me || curl -s icanhazip.com || hostname -I | awk '{print $1}')
+    echo "${SERVER_IP}"
+}
+
 configure_catchall() {
     print_status "Configuring catchall for unmapped domains..."
     
+    # Get server IP
+    SERVER_IP=$(get_server_ip)
+    print_status "Detected server IP: ${SERVER_IP}"
+    
     # Create SSL directory and self-signed certificate
     mkdir -p /etc/nginx/ssl
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout /etc/nginx/ssl/default.key \
-        -out /etc/nginx/ssl/default.crt \
-        -subj '/C=AT/ST=Vienna/L=Vienna/O=nPanel/CN=default' \
-        2>/dev/null
+    if [ ! -f /etc/nginx/ssl/default.crt ]; then
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /etc/nginx/ssl/default.key \
+            -out /etc/nginx/ssl/default.crt \
+            -subj '/C=AT/ST=Vienna/L=Vienna/O=nPanel/CN=default' \
+            2>/dev/null
+    fi
     
     # Create error directory and 404 page
     mkdir -p /var/www/html/error
@@ -368,9 +380,43 @@ EOF404
     
     chown -R www-data:www-data /var/www/html/error
     
-    # Create catchall Nginx config
-    cat > "${NGINX_SITES_AVAILABLE}/000-default-catchall.conf" <<'EOFCATCHALL'
-# Default catchall server for unmapped domains
+    # Create main npanel config with IP access and catchall
+    cat > "${NGINX_SITES_AVAILABLE}/npanel.conf" <<EOFNPANEL
+# nPanel Admin Interface - Server IP Access
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${SERVER_IP};
+    root ${INSTALL_DIR}/public;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+
+    index index.php;
+
+    charset utf-8;
+
+    location / {
+        try_files \\\$uri \\\$uri/ /index.php?\\\$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    error_page 404 /index.php;
+
+    location ~ \\.php\$ {
+        fastcgi_pass unix:/var/run/php/php${DEFAULT_PHP_VERSION}-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME \\\$realpath_root\\\$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\\.(?!well-known).* {
+        deny all;
+    }
+}
+
+# Default catchall for unmapped domains
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
@@ -398,31 +444,30 @@ server {
     location = /404.html { internal; }
     location / { return 404; }
 }
-EOFCATCHALL
+EOFNPANEL
     
-    # Enable catchall
-    ln -sf "${NGINX_SITES_AVAILABLE}/000-default-catchall.conf" "${NGINX_SITES_ENABLED}/000-default-catchall.conf"
+    # Remove default site
+    rm -f "${NGINX_SITES_ENABLED}/default"
     
-    print_success "Catchall configuration created"
+    # Enable site
+    ln -sf "${NGINX_SITES_AVAILABLE}/npanel.conf" "${NGINX_SITES_ENABLED}/npanel.conf"
+    
+    print_success "Catchall and IP access configured"
 }
 
 configure_nginx() {
-    print_status "Configuring Nginx for nPanel..."
+    print_status "Configuring Nginx for nPanel domain..."
     
-    # Prompt for domain (or use specific domain)
-    read -p "Enter domain for nPanel: " PANEL_DOMAIN
-    if [ -z "$PANEL_DOMAIN" ]; then
-        print_error "Domain is required"
-        exit 1
-    fi
+    # Prompt for domain (optional - if provided, creates separate vhost)
+    read -p "Enter domain for nPanel (or press Enter to skip): " PANEL_DOMAIN
     
-    SERVER_NAME_LINE="server_name ${PANEL_DOMAIN} www.${PANEL_DOMAIN};"
-    
-    cat > "${NGINX_SITES_AVAILABLE}/npanel.conf" <<EOFNGINX
+    if [ -n "$PANEL_DOMAIN" ]; then
+        # Create separate vhost for panel domain
+        cat > "${NGINX_SITES_AVAILABLE}/${PANEL_DOMAIN}.conf" <<EOFNGINX
 server {
     listen 80;
     listen [::]:80;
-    ${SERVER_NAME_LINE}
+    server_name ${PANEL_DOMAIN} www.${PANEL_DOMAIN};
     root ${INSTALL_DIR}/public;
 
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -454,25 +499,23 @@ server {
     }
 }
 EOFNGINX
-    
-    # Remove default site
-    rm -f "${NGINX_SITES_ENABLED}/default"
-    
-    # Enable site
-    ln -sf "${NGINX_SITES_AVAILABLE}/npanel.conf" "${NGINX_SITES_ENABLED}/npanel.conf"
-    
-    # Test and reload Nginx
-    nginx -t
-    systemctl reload nginx
-    
-    print_success "Nginx configured for ${PANEL_DOMAIN}"
-    
-    # Only offer SSL if a domain was provided
-    if [ "${PANEL_DOMAIN}" != "_" ]; then
-        read -p "Do you want to install SSL certificate now? (y/n): " INSTALL_SSL
+        
+        # Enable panel domain site
+        ln -sf "${NGINX_SITES_AVAILABLE}/${PANEL_DOMAIN}.conf" "${NGINX_SITES_ENABLED}/${PANEL_DOMAIN}.conf"
+        
+        # Test and reload Nginx
+        nginx -t
+        systemctl reload nginx
+        
+        print_success "Nginx configured for ${PANEL_DOMAIN}"
+        
+        # Offer SSL for panel domain
+        read -p "Do you want to install SSL certificate for ${PANEL_DOMAIN} now? (y/n): " INSTALL_SSL
         if [ "${INSTALL_SSL}" = "y" ] || [ "${INSTALL_SSL}" = "Y" ]; then
             install_ssl "${PANEL_DOMAIN}"
         fi
+    else
+        print_success "Panel accessible via server IP only"
     fi
 }
 

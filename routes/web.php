@@ -23,6 +23,8 @@ Route::middleware(['auth'])->group(function () {
     // Domain management
     Route::post('/domains', [App\Http\Controllers\DomainController::class, 'store'])->name('domains.store');
     Route::get('/domains/{domain}', [App\Http\Controllers\DomainController::class, 'show'])->name('domains.show');
+    Route::get('/domains/{domain}/edit', [App\Http\Controllers\DomainController::class, 'edit'])->name('domains.edit');
+    Route::put('/domains/{domain}', [App\Http\Controllers\DomainController::class, 'update'])->name('domains.update');
     Route::delete('/domains/{domain}', [App\Http\Controllers\DomainController::class, 'destroy'])->name('domains.destroy');
     Route::post('/domains/{domain}/ssl', [App\Http\Controllers\DomainController::class, 'issueSSL'])->name('domains.ssl');
     

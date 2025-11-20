@@ -107,4 +107,39 @@ class DomainController extends Controller
             return Redirect::back()->with('error', 'Failed to issue SSL: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Show the form for editing the specified domain
+     */
+    public function edit(Domain $domain)
+    {
+        return inertia('Domains/Edit', [
+            'domain' => $domain,
+            'phpVersions' => ['7.4', '8.0', '8.1', '8.2', '8.3'],
+        ]);
+    }
+
+    /**
+     * Update the specified domain
+     */
+    public function update(Request $request, Domain $domain): RedirectResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'document_root' => ['nullable', 'string', 'max:512'],
+            'php_version' => ['required', 'string', 'in:7.4,8.0,8.1,8.2,8.3'],
+        ]);
+
+        if ($validator->fails()) {
+            return Redirect::back()->withErrors($validator)->withInput();
+        }
+
+        try {
+            $this->domainService->updateDomain($domain, $validator->validated());
+
+            return Redirect::route('domains.show', $domain)->with('success', 'Domain updated successfully.');
+        } catch (\Exception $e) {
+            \Log::error('Domain update failed', ['domain' => $domain->domain_name, 'error' => $e->getMessage()]);
+            return Redirect::back()->with('error', 'Failed to update domain: ' . $e->getMessage())->withInput();
+        }
+    }
 }
