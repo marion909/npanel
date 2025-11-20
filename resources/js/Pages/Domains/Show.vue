@@ -197,6 +197,31 @@
                                 </div>
                             </div>
                             <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Document Root</label>
+                                <div class="relative">
+                                    <select v-model="documentRootType" @change="updateDocumentRoot"
+                                            class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2">
+                                        <option value="subdomain">Separater Subdomain-Ordner (Standard)</option>
+                                        <option value="main">Hauptdomain Root</option>
+                                        <option value="subfolder">Unterordner der Hauptdomain</option>
+                                    </select>
+                                    <div v-if="documentRootType === 'subdomain'" class="text-xs text-gray-500 font-mono bg-gray-50 p-2 rounded">
+                                        {{ getSubdomainPath() }}
+                                    </div>
+                                    <div v-else-if="documentRootType === 'main'" class="text-xs text-gray-500 font-mono bg-gray-50 p-2 rounded">
+                                        {{ domain.document_root }}
+                                    </div>
+                                    <div v-else-if="documentRootType === 'subfolder'" class="space-y-2">
+                                        <input v-model="subfolderName" type="text" 
+                                               placeholder="Unterordner (z.B. blog, shop)"
+                                               class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md" />
+                                        <div class="text-xs text-gray-500 font-mono bg-gray-50 p-2 rounded">
+                                            {{ domain.document_root }}/{{ subfolderName || 'unterordner' }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">PHP Version</label>
                                 <select v-model="newSubdomain.php_version" 
                                         class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md">
@@ -275,9 +300,12 @@ const props = defineProps({
 
 const showAddSubdomainModal = ref(false);
 const showEditSubdomainModal = ref(false);
+const documentRootType = ref('subdomain');
+const subfolderName = ref('');
 const newSubdomain = ref({
     subdomain_name: '',
     php_version: props.domain.php_version || '8.3',
+    document_root: '',
 });
 const editingSubdomain = ref(null);
 
@@ -319,6 +347,22 @@ const confirmDelete = () => {
     }
 };
 
+const getSubdomainPath = () => {
+    const baseDir = props.domain.document_root.split('/public_html')[0];
+    return `${baseDir}/subdomains/${newSubdomain.value.subdomain_name || 'subdomain'}`;
+};
+
+const updateDocumentRoot = () => {
+    if (documentRootType.value === 'subdomain') {
+        newSubdomain.value.document_root = '';
+    } else if (documentRootType.value === 'main') {
+        newSubdomain.value.document_root = props.domain.document_root;
+    } else if (documentRootType.value === 'subfolder') {
+        subfolderName.value = '';
+        newSubdomain.value.document_root = '';
+    }
+};
+
 const issueSSL = () => {
     if (confirm(`Issue SSL certificate for ${props.domain.domain_name}? This will request a free Let's Encrypt certificate.`)) {
         router.post(`/domains/${props.domain.id}/ssl`, {}, {
@@ -335,12 +379,20 @@ const issueSSL = () => {
 const addSubdomain = () => {
     if (!newSubdomain.value.subdomain_name) return;
     
+    // Set document root based on type
+    if (documentRootType.value === 'subfolder' && subfolderName.value) {
+        newSubdomain.value.document_root = `${props.domain.document_root}/${subfolderName.value}`;
+    }
+    
     router.post(`/domains/${props.domain.id}/subdomains`, newSubdomain.value, {
         onSuccess: () => {
             showAddSubdomainModal.value = false;
+            documentRootType.value = 'subdomain';
+            subfolderName.value = '';
             newSubdomain.value = {
                 subdomain_name: '',
                 php_version: props.domain.php_version || '8.3',
+                document_root: '',
             };
         },
         onError: (errors) => {

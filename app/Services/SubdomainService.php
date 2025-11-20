@@ -67,17 +67,22 @@ class SubdomainService
      */
     protected function createDirectoryStructure(Subdomain $subdomain): void
     {
+        // Always create directory if it doesn't exist
         if (!File::exists($subdomain->document_root)) {
             File::makeDirectory($subdomain->document_root, 0755, true);
-        }
-
-        // Set ownership to www-data
-        exec("sudo chown -R www-data:www-data " . escapeshellarg($subdomain->document_root));
-
-        // Create default index.html
-        $indexPath = $subdomain->document_root . '/index.html';
-        if (!File::exists($indexPath)) {
-            File::put($indexPath, $this->getDefaultIndexContent($subdomain->full_domain));
+            
+            // Set ownership to www-data
+            exec("sudo chown -R www-data:www-data " . escapeshellarg($subdomain->document_root));
+            
+            // Create default index.html only if directory was just created
+            $indexPath = $subdomain->document_root . '/index.html';
+            if (!File::exists($indexPath)) {
+                File::put($indexPath, $this->getDefaultIndexContent($subdomain->full_domain));
+            }
+        } else {
+            // Directory exists (e.g., subfolder of main domain), don't create index.html
+            // Just ensure proper ownership
+            exec("sudo chown -R www-data:www-data " . escapeshellarg($subdomain->document_root));
         }
     }
 
