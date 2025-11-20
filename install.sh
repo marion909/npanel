@@ -89,12 +89,23 @@ install_redis() {
 }
 
 install_mysql() {
-    print_status "Installing MySQL..."
-    apt install -y mysql-server
-    systemctl enable mysql
-    systemctl start mysql
+    print_status "Installing MySQL/MariaDB..."
     
-    print_success "MySQL installed and started"
+    # Try MySQL first, fall back to MariaDB
+    if apt-cache show mysql-server >/dev/null 2>&1; then
+        print_status "Installing MySQL..."
+        apt install -y mysql-server
+        DB_SERVICE="mysql"
+    else
+        print_status "MySQL not available, installing MariaDB..."
+        apt install -y mariadb-server
+        DB_SERVICE="mariadb"
+    fi
+    
+    systemctl enable $DB_SERVICE
+    systemctl start $DB_SERVICE
+    
+    print_success "Database server installed and started"
 }
 
 install_php_versions() {
