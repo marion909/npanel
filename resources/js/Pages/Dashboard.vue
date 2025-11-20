@@ -187,7 +187,6 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({
@@ -236,24 +235,20 @@ const formatDate = (date) => {
 };
 
 const createDomain = async () => {
-    try {
-        await axios.post('/api/domains', form.value);
-        showCreateModal.value = false;
-        form.value = {
-            domain_name: '',
-            php_version: '8.3',
-            ssl_enabled: false
-        };
-        // Reload page to show new domain
-        router.reload();
-    } catch (error) {
-        console.error('Error creating domain:', error);
-        if (error.response?.status === 419) {
-            alert('Session expired. Please refresh the page (Ctrl+F5) and try again.');
-        } else {
-            alert(error.response?.data?.message || 'Failed to create domain: ' + error.message);
+    router.post('/domains', form.value, {
+        onSuccess: () => {
+            showCreateModal.value = false;
+            form.value = {
+                domain_name: '',
+                php_version: '8.3',
+                ssl_enabled: false
+            };
+        },
+        onError: (errors) => {
+            console.error('Error creating domain:', errors);
+            alert(errors.message || 'Failed to create domain');
         }
-    }
+    });
 };
 
 const viewDomain = (domain) => {
