@@ -23,7 +23,7 @@
                                 </div>
                             </div>
                             <div class="flex space-x-3">
-                                <button v-if="!domain.ssl_enabled && domain.status === 'active'" 
+                                <button v-if="showSSLButton" 
                                         @click="issueSSL" 
                                         class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center">
                                     <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -186,6 +186,11 @@ const statusClass = computed(() => {
     if (status === 'suspended') return 'bg-orange-100 text-orange-800';
     if (status === 'failed') return 'bg-red-100 text-red-800';
     return 'bg-gray-100 text-gray-800';
+});
+
+const showSSLButton = computed(() => {
+    // Show button if domain is active and SSL is not enabled (handles 0, false, null)
+    return props.domain.status === 'active' && !props.domain.ssl_enabled;
 });
 
 const formatDate = (date) => {
