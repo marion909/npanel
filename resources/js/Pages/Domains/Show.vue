@@ -23,6 +23,13 @@
                                 </div>
                             </div>
                             <div class="flex space-x-3">
+                                <Link :href="`/domains/${domain.id}/files`" 
+                                      class="px-4 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 flex items-center">
+                                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                                    </svg>
+                                    Files
+                                </Link>
                                 <button v-if="showSSLButton" 
                                         @click="issueSSL" 
                                         class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center">
