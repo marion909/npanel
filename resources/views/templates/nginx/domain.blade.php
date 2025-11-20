@@ -1,18 +1,19 @@
+@if($domain->ssl_enabled && $domain->ssl_cert_path && $domain->ssl_key_path)
 # HTTP Server - Redirect to HTTPS
 server {
     listen 80;
     listen [::]:80;
     server_name {{ $domain->domain_name }} www.{{ $domain->domain_name }};
     
-@if($domain->ssl_enabled)
     # Redirect HTTP to HTTPS
     return 301 https://$server_name$request_uri;
 }
 
 # HTTPS Server
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
     server_name {{ $domain->domain_name }} www.{{ $domain->domain_name }};
     
     # SSL Configuration
@@ -24,7 +25,11 @@ server {
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 10m;
 @else
-    # HTTP only (SSL not enabled)
+# HTTP Server (SSL not configured)
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ $domain->domain_name }} www.{{ $domain->domain_name }};
 @endif
     
     # Document Root
