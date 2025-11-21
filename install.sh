@@ -324,9 +324,14 @@ install_npanel() {
 }
 
 get_server_ip() {
-    # Try to get public IP
-    SERVER_IP=$(curl -s ifconfig.me || curl -s icanhazip.com || hostname -I | awk '{print $1}')
-    echo "${SERVER_IP}"
+    # Try to get public IPv4 address explicitly
+    SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s icanhazip.com || hostname -I | awk '{print $1}' | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+    
+    if [ -z "$SERVER_IP" ]; then
+        echo "127.0.0.1"
+    else
+        echo "${SERVER_IP}"
+    fi
 }
 
 configure_catchall() {

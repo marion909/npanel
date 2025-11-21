@@ -223,7 +223,15 @@ restart_services() {
     # Update Nginx configuration if template exists
     if [ -f "${INSTALL_DIR}/config/nginx/npanel.conf" ]; then
         print_status "Updating Nginx configuration..."
-        SERVER_IP=$(curl -s ifconfig.me || curl -s icanhazip.com || hostname -I | awk '{print $1}')
+        # Get IPv4 address explicitly
+        SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s icanhazip.com || hostname -I | awk '{print $1}' | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+        
+        if [ -z "$SERVER_IP" ]; then
+            print_error "Could not determine server IPv4 address"
+            SERVER_IP="127.0.0.1"
+        fi
+        
+        print_status "Using server IP: ${SERVER_IP}"
         cp "${INSTALL_DIR}/config/nginx/npanel.conf" "/etc/nginx/sites-available/npanel.conf"
         sed -i "s/SERVER_IP/${SERVER_IP}/g" "/etc/nginx/sites-available/npanel.conf"
         
