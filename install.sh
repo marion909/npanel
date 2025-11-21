@@ -682,12 +682,72 @@ install_mail_server() {
         return
     fi
     
-    # Run InstallMailServerJob via Artisan
-    cd "$INSTALL_DIR"
-    sudo -u www-data php artisan queue:work --stop-when-empty &
-    sudo -u www-data php artisan npanel:install-mail
+    print_status "Installing mail server packages..."
     
-    print_success "Mail server installation dispatched (check queue logs for progress)"
+    # Install mail server packages
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        postfix \
+        postfix-mysql \
+        dovecot-core \
+        dovecot-imapd \
+        dovecot-lmtpd \
+        dovecot-mysql \
+        opendkim \
+        opendkim-tools
+    
+    print_success "Mail server packages installed"
+    
+    # Create vmail user
+    print_status "Creating vmail user..."
+    if ! id -u vmail >/dev/null 2>&1; then
+        groupadd -g 5000 vmail
+        useradd -u 5000 -g vmail -s /usr/sbin/nologin -d /var/vmail -m vmail
+        mkdir -p /var/vmail
+        chown -R vmail:vmail /var/vmail
+        chmod 750 /var/vmail
+        print_success "vmail user created with UID 5000"
+    else
+        print_warning "vmail user already exists"
+    fi
+    
+    # Configure Postfix
+    print_status "Configuring Postfix..."
+    postconf -e "myhostname=$(hostname -f)"
+    postconf -e "mydestination=localhost"
+    
+    # Configure OpenDKIM
+    print_status "Configuring OpenDKIM..."
+    mkdir -p /etc/opendkim/keys
+    chmod 750 /etc/opendkim/keys
+    chown -R opendkim:opendkim /etc/opendkim
+    
+    # Enable and start services
+    print_status "Starting mail services..."
+    systemctl enable postfix dovecot opendkim
+    systemctl start postfix dovecot opendkim
+    
+    # Run database migrations for mail tables
+    print_status "Running mail database migrations..."
+    cd "$INSTALL_DIR"
+    sudo -u www-data php artisan migrate --force
+    
+    # Generate mail service configurations via Artisan
+    print_status "Generating mail service configurations..."
+    sudo -u www-data php artisan tinker --execute="
+        \$postfixService = app(\App\Services\PostfixService::class);
+        \$dovecotService = app(\App\Services\DovecotService::class);
+        \$postfixService->generateConfigs();
+        \$postfixService->updateMainConfig();
+        \$dovecotService->generateAllConfigs();
+        echo 'Mail configurations generated\n';
+    "
+    
+    # Reload services with new configs
+    systemctl reload postfix dovecot opendkim
+    
+    print_success "Mail server installation completed!"
+    print_status "You can now create mailboxes via the web interface"
+    print_status "Webmail will be available after configuring a domain"
 }
 
 # Main installation flow

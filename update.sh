@@ -343,6 +343,43 @@ print_update_info() {
     echo ""
 }
 
+check_mail_server_update() {
+    print_status "Checking mail server status..."
+    
+    # Check if mail server packages are installed
+    if dpkg -l | grep -q "dovecot-core" && dpkg -l | grep -q "postfix"; then
+        print_status "Mail server detected. Regenerating configurations..."
+        
+        cd "${INSTALL_DIR}"
+        
+        # Regenerate mail service configurations
+        sudo -u www-data php artisan tinker --execute="
+            try {
+                \$postfixService = app(\App\Services\PostfixService::class);
+                \$dovecotService = app(\App\Services\DovecotService::class);
+                \$postfixService->generateConfigs();
+                \$dovecotService->generateSqlConfig();
+                echo 'Mail configurations updated\n';
+            } catch (\Exception \$e) {
+                echo 'Warning: Could not update mail configs: ' . \$e->getMessage() . '\n';
+            }
+        "
+        
+        # Reload mail services
+        if systemctl is-active --quiet postfix; then
+            systemctl reload postfix || print_warning "Could not reload Postfix"
+        fi
+        
+        if systemctl is-active --quiet dovecot; then
+            systemctl reload dovecot || print_warning "Could not reload Dovecot"
+        fi
+        
+        print_success "Mail server configurations updated"
+    else
+        print_status "Mail server not installed. Skipping mail configuration update."
+    fi
+}
+
 rollback_instructions() {
     echo ""
     echo "=========================================="
@@ -398,6 +435,7 @@ main() {
        clear_caches && \
        optimize_laravel && \
        update_permissions && \
+       check_mail_server_update && \
        restart_services; then
         
         start_queue_workers
