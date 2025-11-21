@@ -90,4 +90,15 @@ return [
     */
     'verify_dns_before_ssl' => env('VERIFY_DNS_BEFORE_SSL', false),
     'dns_propagation_wait' => env('DNS_PROPAGATION_WAIT', 300), // seconds
+
+    /*
+    |--------------------------------------------------------------------------
+    | phpMyAdmin Configuration
+    |--------------------------------------------------------------------------
+    |
+    | phpMyAdmin SSO integration settings.
+    |
+    */
+    'phpmyadmin_url' => env('PHPMYADMIN_URL', 'http://localhost/phpmyadmin'),
+    'phpmyadmin_sso_url' => env('PHPMYADMIN_SSO_URL', env('APP_URL') . '/phpmyadmin-sso.php'),
 ];

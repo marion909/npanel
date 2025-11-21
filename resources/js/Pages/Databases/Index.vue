@@ -258,7 +258,17 @@
                             </div>
                         </div>
                     </div>
-                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-3">
+                        <button
+                            @click="openPhpMyAdmin(selectedDatabase)"
+                            type="button"
+                            class="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:w-auto sm:text-sm"
+                        >
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                            </svg>
+                            Open phpMyAdmin
+                        </button>
                         <button
                             @click="showInfoModal = false"
                             type="button"
@@ -387,6 +397,11 @@ const resumeDatabase = (database) => {
 const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     alert('Copied to clipboard!');
+};
+
+const openPhpMyAdmin = (database) => {
+    const url = `/domains/${props.domain.id}/databases/${database.id}/phpmyadmin`;
+    window.open(url, '_blank');
 };
 
 const getStatusClass = (status) => {

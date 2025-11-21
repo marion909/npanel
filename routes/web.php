@@ -52,4 +52,5 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/domains/{domain}/databases/{database}', [App\Http\Controllers\DatabaseController::class, 'destroy'])->name('databases.destroy');
     Route::post('/domains/{domain}/databases/{database}/suspend', [App\Http\Controllers\DatabaseController::class, 'suspend'])->name('databases.suspend');
     Route::post('/domains/{domain}/databases/{database}/resume', [App\Http\Controllers\DatabaseController::class, 'resume'])->name('databases.resume');
+    Route::get('/domains/{domain}/databases/{database}/phpmyadmin', [App\Http\Controllers\DatabaseController::class, 'openPhpMyAdmin'])->name('databases.phpmyadmin');
 });

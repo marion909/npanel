@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Database;
 use App\Models\Domain;
 use App\Services\DatabaseService;
+use App\Services\PhpMyAdminService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
@@ -14,7 +15,8 @@ use Illuminate\Support\Facades\Validator;
 class DatabaseController extends Controller
 {
     public function __construct(
-        protected DatabaseService $databaseService
+        protected DatabaseService $databaseService,
+        protected PhpMyAdminService $phpMyAdminService
     ) {}
 
     /**
@@ -145,6 +147,28 @@ class DatabaseController extends Controller
                 'error' => $e->getMessage()
             ]);
             return Redirect::back()->with('error', 'Failed to resume database: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Open phpMyAdmin with SSO
+     */
+    public function openPhpMyAdmin(Domain $domain, Database $database): RedirectResponse
+    {
+        if ($database->domain_id !== $domain->id) {
+            abort(404);
+        }
+
+        try {
+            $url = $this->phpMyAdminService->getPhpMyAdminUrl($database);
+            
+            return Redirect::away($url);
+        } catch (\Exception $e) {
+            \Log::error('phpMyAdmin SSO failed', [
+                'database' => $database->database_name,
+                'error' => $e->getMessage()
+            ]);
+            return Redirect::back()->with('error', 'Failed to open phpMyAdmin: ' . $e->getMessage());
         }
     }
 }
