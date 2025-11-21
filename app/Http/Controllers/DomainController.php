@@ -72,12 +72,28 @@ class DomainController extends Controller
     public function destroy(Domain $domain): RedirectResponse
     {
         try {
-            // Delete the domain (this will also trigger cleanup in the service)
-            $this->domainService->deleteDomain($domain);
+            \Log::info('Domain deletion requested', [
+                'domain' => $domain->domain_name,
+                'id' => $domain->id,
+                'user_id' => $domain->user_id
+            ]);
 
-            return Redirect::route('dashboard')->with('success', 'Domain deleted successfully.');
+            // Delete the domain (this will also trigger cleanup in the service)
+            $result = $this->domainService->deleteDomain($domain);
+
+            if (!$result) {
+                \Log::error('Domain deletion returned false', ['domain' => $domain->domain_name]);
+                return Redirect::back()->with('error', 'Failed to delete domain. Check logs for details.');
+            }
+
+            \Log::info('Domain deletion completed', ['domain' => $domain->domain_name]);
+            return Redirect::route('dashboard')->with('success', 'Domain deletion started. All resources will be cleaned up in the background.');
         } catch (\Exception $e) {
-            \Log::error('Domain deletion failed', ['domain' => $domain->domain_name, 'error' => $e->getMessage()]);
+            \Log::error('Domain deletion failed with exception', [
+                'domain' => $domain->domain_name,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return Redirect::back()->with('error', 'Failed to delete domain: ' . $e->getMessage());
         }
     }

@@ -369,13 +369,25 @@ const formatDate = (date) => {
 };
 
 const confirmDelete = () => {
-    if (confirm(`Are you sure you want to delete ${props.domain.domain_name}? This action cannot be undone.`)) {
+    if (confirm(`Are you sure you want to delete ${props.domain.domain_name}? This will delete all databases, files, and configurations. SSL certificates will be kept for reuse. This action cannot be undone!`)) {
         router.delete(`/domains/${props.domain.id}`, {
+            preserveState: false,
+            onBefore: () => {
+                console.log('Deleting domain:', props.domain.domain_name);
+            },
             onSuccess: () => {
+                console.log('Domain deleted successfully');
                 // Redirect is handled by controller
             },
             onError: (errors) => {
-                alert('Failed to delete domain: ' + Object.values(errors).join(', '));
+                console.error('Delete failed:', errors);
+                const errorMessage = typeof errors === 'string' 
+                    ? errors 
+                    : Object.values(errors).join(', ');
+                alert('Failed to delete domain: ' + errorMessage);
+            },
+            onFinish: () => {
+                console.log('Delete request finished');
             }
         });
     }
