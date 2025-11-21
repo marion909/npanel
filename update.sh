@@ -7,6 +7,17 @@
 
 set -e  # Exit on error
 
+# Parse command line arguments
+AUTO_YES=false
+for arg in "$@"; do
+    case $arg in
+        -y|--auto-yes|--yes)
+            AUTO_YES=true
+            shift
+            ;;
+    esac
+done
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -255,8 +266,13 @@ check_env_variables() {
         echo "=========================================="
         echo ""
         
-        # Wait for user to see credentials
-        read -p "Press Enter to continue after saving these credentials..."
+        # Wait for user to see credentials (unless auto-yes is enabled)
+        if [ "$AUTO_YES" = false ]; then
+            read -p "Press Enter to continue after saving these credentials..."
+        else
+            print_status "Auto-yes mode: Continuing automatically..."
+            sleep 2
+        fi
     else
         print_success "MySQL root credentials already configured"
     fi
@@ -312,12 +328,16 @@ main() {
     print_status "Starting update process..."
     echo ""
     
-    # Confirm update
-    read -p "This will update nPanel to the latest version. Continue? (y/n) " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_warning "Update cancelled"
-        exit 0
+    # Confirm update (unless auto-yes is enabled)
+    if [ "$AUTO_YES" = false ]; then
+        read -p "This will update nPanel to the latest version. Continue? (y/n) " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_warning "Update cancelled"
+            exit 0
+        fi
+    else
+        print_status "Auto-yes mode: Skipping confirmation"
     fi
     
     # Perform update steps
