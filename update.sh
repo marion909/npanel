@@ -379,7 +379,238 @@ check_mail_server_update() {
         
         print_success "Mail server configurations updated"
     else
-        print_status "Mail server not installed. Skipping mail configuration update."
+        print_status "Mail server not installed."
+        
+        # Offer to install mail server
+        if [ "$AUTO_YES" = false ]; then
+            echo ""
+            read -p "Would you like to install the mail server now? (y/n): " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                install_mail_server
+            else
+                print_status "Skipping mail server installation."
+            fi
+        else
+            print_status "Use --install-mail flag to install mail server during update."
+        fi
+    fi
+}
+
+install_mail_server() {
+    print_status "Installing mail server components (Postfix, Dovecot, OpenDKIM, Roundcube)..."
+    
+    print_status "Installing mail server packages..."
+    
+    # Install mail server packages
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        postfix \
+        postfix-mysql \
+        dovecot-core \
+        dovecot-imapd \
+        dovecot-lmtpd \
+        dovecot-mysql \
+        opendkim \
+        opendkim-tools
+    
+    print_success "Mail server packages installed"
+    
+    # Create vmail user
+    print_status "Creating vmail user..."
+    if ! id -u vmail >/dev/null 2>&1; then
+        groupadd -g 5000 vmail
+        useradd -u 5000 -g vmail -s /usr/sbin/nologin -d /var/vmail -m vmail
+        mkdir -p /var/vmail
+        chown -R vmail:vmail /var/vmail
+        chmod 750 /var/vmail
+        print_success "vmail user created with UID 5000"
+    else
+        print_warning "vmail user already exists"
+    fi
+    
+    # Configure Postfix
+    print_status "Configuring Postfix..."
+    postconf -e "myhostname=$(hostname -f)"
+    postconf -e "mydestination=localhost"
+    
+    # Configure OpenDKIM
+    print_status "Configuring OpenDKIM..."
+    mkdir -p /etc/opendkim/keys
+    chmod 750 /etc/opendkim/keys
+    chown -R opendkim:opendkim /etc/opendkim
+    
+    # Enable and start services
+    print_status "Starting mail services..."
+    systemctl enable postfix dovecot opendkim
+    systemctl start postfix dovecot opendkim
+    
+    # Run database migrations for mail tables
+    print_status "Running mail database migrations..."
+    cd "${INSTALL_DIR}"
+    sudo -u www-data php artisan migrate --force
+    
+    # Generate mail service configurations via Artisan
+    print_status "Generating mail service configurations..."
+    sudo -u www-data php artisan tinker --execute="
+        \$postfixService = app(\App\Services\PostfixService::class);
+        \$dovecotService = app(\App\Services\DovecotService::class);
+        \$postfixService->generateConfigs();
+        \$postfixService->updateMainConfig();
+        \$dovecotService->generateAllConfigs();
+        echo 'Mail configurations generated\n';
+    "
+    
+    # Reload services with new configs
+    systemctl reload postfix dovecot opendkim
+    
+    # Install Roundcube webmail
+    print_status "Installing Roundcube webmail..."
+    install_roundcube
+    
+    print_success "Mail server installation completed!"
+    print_status "You can now create mailboxes via the web interface"
+    print_status "Webmail will be available at: https://webmail.$(hostname -f)"
+}
+
+install_roundcube() {
+    local ROUNDCUBE_VERSION="1.6.5"
+    local ROUNDCUBE_PATH="/var/www/roundcube"
+    local WEBMAIL_DOMAIN="webmail.$(hostname -f)"
+    
+    # Check if already installed
+    if [ -d "$ROUNDCUBE_PATH" ]; then
+        print_warning "Roundcube already installed at $ROUNDCUBE_PATH"
+        return
+    fi
+    
+    # Get database credentials from .env
+    cd "${INSTALL_DIR}"
+    DB_USER=$(grep DB_USERNAME .env | cut -d '=' -f2)
+    DB_PASSWORD=$(grep DB_PASSWORD .env | cut -d '=' -f2)
+    DB_NAME=$(grep DB_DATABASE .env | cut -d '=' -f2)
+    
+    # Download Roundcube
+    print_status "Downloading Roundcube ${ROUNDCUBE_VERSION}..."
+    cd /tmp
+    wget -q "https://github.com/roundcube/roundcubemail/releases/download/${ROUNDCUBE_VERSION}/roundcubemail-${ROUNDCUBE_VERSION}-complete.tar.gz"
+    
+    # Extract
+    print_status "Extracting Roundcube..."
+    tar -xzf "roundcubemail-${ROUNDCUBE_VERSION}-complete.tar.gz" -C /var/www/
+    mv "/var/www/roundcubemail-${ROUNDCUBE_VERSION}" "$ROUNDCUBE_PATH"
+    rm "roundcubemail-${ROUNDCUBE_VERSION}-complete.tar.gz"
+    
+    # Set permissions
+    chown -R www-data:www-data "$ROUNDCUBE_PATH"
+    chmod 755 "$ROUNDCUBE_PATH"
+    
+    # Create Nginx vhost
+    print_status "Creating Nginx vhost for $WEBMAIL_DOMAIN..."
+    cat > /etc/nginx/sites-available/roundcube.conf <<NGINX_EOF
+server {
+    listen 80;
+    server_name ${WEBMAIL_DOMAIN};
+
+    # ACME challenge directory
+    location /.well-known/acme-challenge/ {
+        root /var/www/roundcube;
+    }
+
+    # Redirect HTTP to HTTPS
+    location / {
+        return 301 https://\$server_name\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name ${WEBMAIL_DOMAIN};
+
+    root /var/www/roundcube;
+    index index.php index.html;
+
+    # SSL Configuration (self-signed initially)
+    ssl_certificate /etc/ssl/certs/ssl-cert-snakeoil.pem;
+    ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(ht|svn|git) {
+        deny all;
+    }
+}
+NGINX_EOF
+    
+    # Enable site
+    ln -sf /etc/nginx/sites-available/roundcube.conf /etc/nginx/sites-enabled/
+    
+    # Test and reload Nginx
+    nginx -t && systemctl reload nginx
+    
+    # Configure Roundcube
+    print_status "Configuring Roundcube..."
+    
+    # Generate random DES key
+    local RANDOM_KEY=$(openssl rand -base64 24)
+    
+    cat > "$ROUNDCUBE_PATH/config/config.inc.php" <<PHP_EOF
+<?php
+\$config = [];
+
+// Database connection
+\$config['db_dsnw'] = 'mysql://${DB_USER}:${DB_PASSWORD}@localhost/${DB_NAME}';
+
+// IMAP/SMTP settings
+\$config['default_host'] = 'ssl://localhost';
+\$config['default_port'] = 993;
+\$config['smtp_host'] = 'tls://localhost';
+\$config['smtp_port'] = 587;
+\$config['smtp_user'] = '%u';
+\$config['smtp_pass'] = '%p';
+
+// Security
+\$config['des_key'] = '${RANDOM_KEY}';
+\$config['cipher_method'] = 'AES-256-CBC';
+
+// UI
+\$config['product_name'] = 'nPanel Webmail';
+\$config['support_url'] = '';
+\$config['skin'] = 'elastic';
+
+// Misc
+\$config['enable_installer'] = false;
+\$config['log_driver'] = 'syslog';
+\$config['syslog_facility'] = LOG_MAIL;
+PHP_EOF
+    
+    chown www-data:www-data "$ROUNDCUBE_PATH/config/config.inc.php"
+    chmod 640 "$ROUNDCUBE_PATH/config/config.inc.php"
+    
+    print_success "Roundcube installed at $ROUNDCUBE_PATH"
+    
+    # Issue SSL certificate
+    print_status "Issuing SSL certificate for $WEBMAIL_DOMAIN..."
+    if [ -f "/root/.acme.sh/acme.sh" ]; then
+        cd "${INSTALL_DIR}"
+        sudo -u www-data php artisan npanel:roundcube-ssl --domain="$WEBMAIL_DOMAIN" || \
+            print_warning "Failed to issue SSL certificate. You can try manually later with: php artisan npanel:roundcube-ssl"
+    else
+        print_warning "acme.sh not found. Roundcube will use self-signed certificate."
+        print_status "You can issue a certificate later with: php artisan npanel:roundcube-ssl"
     fi
 }
 
