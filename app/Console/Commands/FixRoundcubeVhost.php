@@ -83,6 +83,9 @@ NGINX;
         if (File::exists('/etc/nginx/sites-enabled/roundcube.conf')) {
             unlink('/etc/nginx/sites-enabled/roundcube.conf');
         }
+        if (File::exists('/etc/nginx/sites-enabled/00-roundcube.conf')) {
+            unlink('/etc/nginx/sites-enabled/00-roundcube.conf');
+        }
 
         // Create new symlink with priority
         symlink('/etc/nginx/sites-available/roundcube.conf', '/etc/nginx/sites-enabled/00-roundcube.conf');
