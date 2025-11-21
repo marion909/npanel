@@ -780,6 +780,11 @@ install_roundcube() {
     chown -R www-data:www-data "$ROUNDCUBE_PATH"
     chmod 755 "$ROUNDCUBE_PATH"
     
+    # Create ACME challenge directory with proper permissions
+    mkdir -p "$ROUNDCUBE_PATH/.well-known/acme-challenge"
+    chown -R www-data:www-data "$ROUNDCUBE_PATH/.well-known"
+    chmod -R 755 "$ROUNDCUBE_PATH/.well-known"
+    
     # Create Nginx vhost
     print_status "Creating Nginx vhost for $WEBMAIL_DOMAIN..."
     cat > /etc/nginx/sites-available/roundcube.conf <<'NGINX_EOF'
