@@ -6,10 +6,13 @@
  * Token-based authentication with single-use tokens stored in Redis
  */
 
-// Bootstrap Laravel
-require_once __DIR__ . '/../bootstrap/app.php';
+// Load Composer autoloader
+require_once __DIR__ . '/../vendor/autoload.php';
 
-$app = $app ?? require_once __DIR__ . '/../bootstrap/app.php';
+// Bootstrap Laravel
+$app = require_once __DIR__ . '/../bootstrap/app.php';
+
+// Boot the application
 $kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
 $request = Illuminate\Http\Request::capture();
 $kernel->handle($request);
