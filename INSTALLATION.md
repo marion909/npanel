@@ -1,338 +1,273 @@
-# nPanel - Installation & Setup Guide
+# nPanel Installation & Update
 
-## 🚀 Quick Start
+## Fresh Installation
 
-This guide will help you set up nPanel on your server.
+Für eine komplette Neuinstallation von nPanel auf einem frischen Ubuntu/Debian Server:
 
-## Prerequisites
-
-- Ubuntu/Debian server (20.04+ recommended)
-- Root or sudo access
-- PHP 8.2+
-- MySQL/PostgreSQL/SQLite
-- Redis
-- Node.js 18+
-- Composer 2.x
-
-## Step-by-Step Installation
-
-### 1. System Update
 ```bash
-sudo apt update && sudo apt upgrade -y
+# Als root user
+wget https://raw.githubusercontent.com/marion909/npanel/main/install.sh
+chmod +x install.sh
+./install.sh
 ```
 
-### 2. Install Required Software
+### Was das Script installiert:
 
-**Install Nginx**:
-```bash
-sudo apt install nginx -y
-sudo systemctl enable nginx
-sudo systemctl start nginx
+- ✅ Nginx Web Server
+- ✅ MySQL/MariaDB Datenbank Server
+- ✅ Redis für Queue und Cache
+- ✅ PHP 7.4, 8.0, 8.1, 8.2, 8.3 mit PHP-FPM
+- ✅ Composer (PHP Dependency Manager)
+- ✅ Node.js 20.x & npm
+- ✅ acme.sh für SSL-Zertifikate
+- ✅ Supervisor für Queue Workers
+- ✅ nPanel Laravel Application
+- ✅ Nginx Konfiguration mit IP-Access und Catchall
+- ✅ Automatische Migration der Datenbank
+- ✅ Admin-User Erstellung
+
+### Nach der Installation:
+
+Das Script wird dich nach folgenden Informationen fragen:
+- Email für SSL-Zertifikate (acme.sh)
+- MySQL root Passwort (oder generiert eins)
+- Admin Name, Email & Passwort
+
+**Wichtig:** Speichere alle angezeigten Credentials! Sie werden in der `.env` Datei gespeichert.
+
+### Zugriff auf das Panel:
+
+Nach erfolgreicher Installation ist das Panel erreichbar unter:
+```
+http://DEINE_SERVER_IP
 ```
 
-**Install Redis**:
+---
+
+## Update bestehender Installation
+
+Für Updates einer bereits installierten nPanel-Installation:
+
 ```bash
-sudo apt install redis-server -y
-sudo systemctl enable redis-server
-sudo systemctl start redis-server
+# Als root user
+cd /var/www/npanel
+wget https://raw.githubusercontent.com/marion909/npanel/main/update.sh
+chmod +x update.sh
+./update.sh
 ```
 
-**Install MySQL** (or PostgreSQL):
+### Was das Update-Script macht:
+
+1. **Backup erstellen:**
+   - SQLite Datenbank → `/var/backups/npanel/database_TIMESTAMP.sqlite`
+   - .env Datei → `/var/backups/npanel/.env_TIMESTAMP`
+   - Storage Ordner → `/var/backups/npanel/storage_TIMESTAMP.tar.gz`
+
+2. **Maintenance Mode aktivieren:**
+   - Besucher sehen "Wartungsmodus" Seite
+   - Verhindert Datenbankänderungen während Update
+
+3. **Queue Workers stoppen:**
+   - Laufende Background-Jobs werden beendet
+   - Verhindert Fehler bei Code-Updates
+
+4. **Code aktualisieren:**
+   - `git pull` von GitHub Repository
+   - Neue Features und Bugfixes werden geladen
+
+5. **Dependencies aktualisieren:**
+   - PHP: `composer install --no-dev --optimize-autoloader`
+   - Node.js: `npm install`
+
+6. **Frontend neu bauen:**
+   - `npm run build` erstellt neue produktive Assets
+   - Vue.js Komponenten werden kompiliert
+
+7. **Datenbank migrieren:**
+   - `php artisan migrate --force`
+   - Neue Tabellen/Spalten werden angelegt
+
+8. **Caches leeren & optimieren:**
+   - Config, Route, View Cache neu generieren
+   - Laravel wird für Production optimiert
+
+9. **Permissions aktualisieren:**
+   - www-data Benutzer bekommt richtige Rechte
+
+10. **Services neustarten:**
+    - Nginx reload
+    - PHP-FPM restart
+    - Queue Workers restart
+
+### Bei fehlgeschlagenem Update:
+
+Das Script gibt dir Rollback-Anweisungen:
+
 ```bash
-sudo apt install mysql-server -y
-sudo mysql_secure_installation
+# Datenbank wiederherstellen
+cp /var/backups/npanel/database_TIMESTAMP.sqlite /var/www/npanel/database/database.sqlite
+
+# .env wiederherstellen
+cp /var/backups/npanel/.env_TIMESTAMP /var/www/npanel/.env
+
+# Storage wiederherstellen
+tar -xzf /var/backups/npanel/storage_TIMESTAMP.tar.gz -C /var/www/npanel
+
+# Code zurücksetzen
+cd /var/www/npanel && git reset --hard HEAD~1
+
+# Services neustarten
+systemctl reload nginx
+supervisorctl restart npanel-worker:*
+php artisan up
 ```
 
-**Install PHP 8.3 and extensions**:
-```bash
-sudo add-apt-repository ppa:ondrej/php -y
-sudo apt update
-sudo apt install php8.3-{cli,fpm,mysql,mbstring,xml,curl,gd,zip,redis} -y
-```
+---
 
-**Install Composer**:
-```bash
-curl -sS https://getcomposer.org/installer | php
-sudo mv composer.phar /usr/local/bin/composer
-sudo chmod +x /usr/local/bin/composer
-```
+## Manuelle Update-Schritte
 
-**Install Node.js**:
-```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install nodejs -y
-```
-
-### 3. Install Multiple PHP Versions
+Falls du das Update manuell durchführen möchtest:
 
 ```bash
-# Install PHP 7.4 through 8.3
-for version in 7.4 8.0 8.1 8.2 8.3; do
-    sudo apt install php${version}-{cli,fpm,mysql,mbstring,xml,curl,gd,zip,redis} -y
-    sudo systemctl enable php${version}-fpm
-    sudo systemctl start php${version}-fpm
-done
-```
+# 1. Backup erstellen
+mkdir -p /var/backups/npanel
+cp /var/www/npanel/database/database.sqlite /var/backups/npanel/database_backup.sqlite
+cp /var/www/npanel/.env /var/backups/npanel/.env_backup
 
-### 4. Install acme.sh for SSL
+# 2. Maintenance Mode
+cd /var/www/npanel
+php artisan down
 
-```bash
-curl https://get.acme.sh | sh -s email=admin@yourdomain.com
-source ~/.bashrc
-```
+# 3. Queue Workers stoppen
+supervisorctl stop npanel-worker:*
 
-### 5. Clone nPanel
+# 4. Code aktualisieren
+git pull origin main
 
-```bash
-cd /var/www
-sudo git clone https://github.com/marion909/npanel.git
-cd npanel
-```
-
-### 6. Install Dependencies
-
-```bash
-# PHP dependencies
+# 5. Dependencies
 composer install --no-dev --optimize-autoloader
-
-# Node.js dependencies
 npm install
 npm run build
-```
 
-### 7. Configure Environment
-
-```bash
-# Copy environment file
-cp .env.example .env
-
-# Generate app key
-php artisan key:generate
-```
-
-**Edit `.env`**:
-```bash
-nano .env
-```
-
-Configure:
-```env
-APP_NAME=nPanel
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://panel.yourdomain.com
-
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_DATABASE=npanel
-DB_USERNAME=npanel_user
-DB_PASSWORD=your_secure_password
-
-REDIS_HOST=127.0.0.1
-QUEUE_CONNECTION=redis
-
-NPANEL_BASE_PATH=/home
-NPANEL_DEFAULT_USER=www-data
-NPANEL_DEFAULT_PHP_VERSION=8.3
-```
-
-### 8. Create Database
-
-```bash
-sudo mysql
-```
-
-```sql
-CREATE DATABASE npanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'npanel_user'@'localhost' IDENTIFIED BY 'your_secure_password';
-GRANT ALL PRIVILEGES ON npanel.* TO 'npanel_user'@'localhost';
-FLUSH PRIVILEGES;
-EXIT;
-```
-
-### 9. Run Migrations
-
-```bash
+# 6. Datenbank
 php artisan migrate --force
-```
 
-### 10. Set Permissions
+# 7. .env prüfen (falls neue Variablen hinzugekommen sind)
+# Vergleiche mit .env.example
 
-```bash
-sudo chown -R www-data:www-data /var/www/npanel
-sudo chmod -R 755 /var/www/npanel
-sudo chmod -R 775 /var/www/npanel/storage
-sudo chmod -R 775 /var/www/npanel/bootstrap/cache
-```
+# 8. Caches
+php artisan config:clear
+php artisan cache:clear
+php artisan route:clear
+php artisan view:clear
 
-### 11. Configure Nginx for Panel
-
-Create `/etc/nginx/sites-available/npanel.conf`:
-
-```nginx
-server {
-    listen 80;
-    server_name panel.yourdomain.com;
-    root /var/www/npanel/public;
-
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
-    add_header X-XSS-Protection "1; mode=block";
-
-    index index.php;
-
-    charset utf-8;
-
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location = /favicon.ico { access_log off; log_not_found off; }
-    location = /robots.txt  { access_log off; log_not_found off; }
-
-    error_page 404 /index.php;
-
-    location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-        include fastcgi_params;
-    }
-
-    location ~ /\.(?!well-known).* {
-        deny all;
-    }
-}
-```
-
-Enable site:
-```bash
-sudo ln -s /etc/nginx/sites-available/npanel.conf /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### 12. Configure Supervisor for Queue Worker
-
-Install Supervisor:
-```bash
-sudo apt install supervisor -y
-```
-
-Create `/etc/supervisor/conf.d/npanel-worker.conf`:
-
-```ini
-[program:npanel-worker]
-process_name=%(program_name)s_%(process_num)02d
-command=php /var/www/npanel/artisan queue:work --tries=3 --timeout=300
-autostart=true
-autorestart=true
-stopasgroup=true
-killasgroup=true
-user=www-data
-numprocs=2
-redirect_stderr=true
-stdout_logfile=/var/www/npanel/storage/logs/worker.log
-stopwaitsecs=3600
-```
-
-Start worker:
-```bash
-sudo supervisorctl reread
-sudo supervisorctl update
-sudo supervisorctl start npanel-worker:*
-```
-
-### 13. Configure Cron for Scheduled Tasks
-
-```bash
-sudo crontab -e
-```
-
-Add:
-```cron
-* * * * * cd /var/www/npanel && php artisan schedule:run >> /dev/null 2>&1
-```
-
-### 14. Optimize Laravel
-
-```bash
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+
+# 9. Permissions
+chown -R www-data:www-data /var/www/npanel
+chmod -R 755 /var/www/npanel
+chmod -R 775 /var/www/npanel/storage
+chmod -R 775 /var/www/npanel/bootstrap/cache
+
+# 10. Services
+systemctl reload nginx
+supervisorctl start npanel-worker:*
+
+# 11. Maintenance Mode deaktivieren
+php artisan up
 ```
 
-### 15. Create First User
+---
+
+## Wichtige Pfade
+
+```
+Panel Installation:     /var/www/npanel
+Nginx Config:           /etc/nginx/sites-available/npanel.conf
+Backups:                /var/backups/npanel
+Logs:                   /var/www/npanel/storage/logs/laravel.log
+Database:               /var/www/npanel/database/database.sqlite
+Environment:            /var/www/npanel/.env
+Queue Worker Config:    /etc/supervisor/conf.d/npanel-worker.conf
+```
+
+---
+
+## Nützliche Befehle
 
 ```bash
-php artisan tinker
+# Status prüfen
+supervisorctl status                          # Queue Workers
+systemctl status nginx                        # Nginx
+systemctl status php8.3-fpm                   # PHP-FPM
+
+# Logs ansehen
+tail -f /var/www/npanel/storage/logs/laravel.log
+tail -f /var/log/nginx/error.log
+
+# Queue Worker neustarten
+supervisorctl restart npanel-worker:*
+
+# Cache leeren (falls Probleme auftreten)
+cd /var/www/npanel
+php artisan cache:clear
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+
+# Datenbank Backup erstellen
+cp /var/www/npanel/database/database.sqlite /root/database_backup_$(date +%Y%m%d).sqlite
 ```
 
-```php
-$user = new App\Models\User();
-$user->name = 'Admin';
-$user->email = 'admin@yourdomain.com';
-$user->password = bcrypt('your_password');
-$user->save();
-exit
-```
+---
 
-### 16. Setup SSL for Panel (Optional)
+## Troubleshooting
 
+### Update schlägt fehl: "Could not resolve host"
 ```bash
-sudo certbot --nginx -d panel.yourdomain.com
+# DNS prüfen
+ping github.com
+# Falls nicht erreichbar: DNS Server in /etc/resolv.conf anpassen
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
 ```
 
-Or use acme.sh:
+### Permissions Fehler nach Update
 ```bash
-~/.acme.sh/acme.sh --issue -d panel.yourdomain.com -w /var/www/npanel/public
-~/.acme.sh/acme.sh --install-cert -d panel.yourdomain.com \
-    --cert-file /etc/letsencrypt/live/panel.yourdomain.com/cert.pem \
-    --key-file /etc/letsencrypt/live/panel.yourdomain.com/privkey.pem \
-    --fullchain-file /etc/letsencrypt/live/panel.yourdomain.com/fullchain.pem \
-    --reloadcmd "systemctl reload nginx"
+cd /var/www/npanel
+chown -R www-data:www-data .
+chmod -R 755 .
+chmod -R 775 storage bootstrap/cache database
 ```
 
-## ✅ Verify Installation
-
-1. Visit `https://panel.yourdomain.com`
-2. Login with admin credentials
-3. Create a test domain
-4. Check queue worker: `sudo supervisorctl status`
-5. Check logs: `tail -f /var/www/npanel/storage/logs/laravel.log`
-
-## 🔧 Troubleshooting
-
-### Queue not processing?
+### Queue Workers laufen nicht
 ```bash
-sudo supervisorctl restart npanel-worker:*
+supervisorctl reread
+supervisorctl update
+supervisorctl start npanel-worker:*
 ```
 
-### Permission errors?
+### "Base table or column not found" nach Update
 ```bash
-sudo chown -R www-data:www-data /var/www/npanel/storage
-sudo chmod -R 775 /var/www/npanel/storage
+cd /var/www/npanel
+php artisan migrate --force
+php artisan cache:clear
 ```
 
-### Nginx config test fails?
+### Frontend zeigt alte Version
 ```bash
-sudo nginx -t
-# Fix any syntax errors shown
+cd /var/www/npanel
+npm run build
+php artisan view:clear
+# Browser Cache leeren (Strg+Shift+R)
 ```
 
-### PHP-FPM not starting?
-```bash
-sudo systemctl status php8.3-fpm
-sudo journalctl -u php8.3-fpm
-```
+---
 
-## 📚 Next Steps
+## Support
 
-- Read the [User Guide](USAGE.md)
-- Configure domain DNS to point to your server
-- Set up automatic backups
-- Review security settings in `config/npanel.php`
-
-## 🆘 Support
-
-- GitHub Issues: https://github.com/marion909/npanel/issues
-- Documentation: https://github.com/marion909/npanel/wiki
+Bei Problemen:
+1. Logs prüfen: `/var/www/npanel/storage/logs/laravel.log`
+2. GitHub Issues: https://github.com/marion909/npanel/issues
+3. Backup wiederherstellen (siehe oben)

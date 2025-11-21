@@ -204,12 +204,34 @@ install_acme_sh() {
 setup_database() {
     print_status "Setting up database..."
     
-    # Generate random password
+    # Generate random password for nPanel database
     DB_PASSWORD=$(openssl rand -base64 32)
     
+    # Generate random MySQL root password if not already set
+    read -sp "Enter MySQL root password (leave empty to generate): " MYSQL_ROOT_PASS
+    echo ""
+    
+    if [ -z "$MYSQL_ROOT_PASS" ]; then
+        MYSQL_ROOT_PASS=$(openssl rand -base64 32)
+        print_status "Generated MySQL root password"
+        
+        # Set MySQL root password
+        mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';" 2>/dev/null || \
+        mysqladmin -u root password "${MYSQL_ROOT_PASS}" 2>/dev/null || \
+        print_warning "Could not set MySQL root password (might already be set)"
+    fi
+    
+    # Create nPanel database and user
+    mysql -u root -p"${MYSQL_ROOT_PASS}" -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null || \
     mysql -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    
+    mysql -u root -p"${MYSQL_ROOT_PASS}" -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';" 2>/dev/null || \
     mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';"
+    
+    mysql -u root -p"${MYSQL_ROOT_PASS}" -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';" 2>/dev/null || \
     mysql -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';"
+    
+    mysql -u root -p"${MYSQL_ROOT_PASS}" -e "FLUSH PRIVILEGES;" 2>/dev/null || \
     mysql -e "FLUSH PRIVILEGES;"
     
     print_success "Database created"
@@ -218,10 +240,13 @@ setup_database() {
     echo "Username: ${DB_USER}"
     echo "Password: ${DB_PASSWORD}"
     echo ""
+    echo "MySQL Root Password: ${MYSQL_ROOT_PASS}"
+    echo ""
     echo "SAVE THESE CREDENTIALS! They will be written to .env file."
     
     # Store for later use
     export NPANEL_DB_PASSWORD="${DB_PASSWORD}"
+    export NPANEL_MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASS}"
 }
 
 install_npanel() {
@@ -262,6 +287,14 @@ install_npanel() {
         
         # Set queue connection to redis
         sed -i "s/QUEUE_CONNECTION=.*/QUEUE_CONNECTION=redis/" .env
+        
+        # Add MySQL root credentials for database management
+        echo "" >> .env
+        echo "# MySQL Root Connection for Database Management" >> .env
+        echo "MYSQL_ROOT_HOST=127.0.0.1" >> .env
+        echo "MYSQL_ROOT_PORT=3306" >> .env
+        echo "MYSQL_ROOT_USERNAME=root" >> .env
+        echo "MYSQL_ROOT_PASSWORD=${NPANEL_MYSQL_ROOT_PASSWORD}" >> .env
     fi
     
     # Create SQLite database file
