@@ -13,7 +13,7 @@ class Database extends Model
         'database_name',
         'display_name',
         'mysql_user',
-        'mysql_password_encrypted',
+        'mysql_password', // Will be encrypted via mutator to mysql_password_encrypted
         'status',
         'size_mb',
     ];
