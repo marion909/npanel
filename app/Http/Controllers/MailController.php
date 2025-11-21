@@ -11,6 +11,7 @@ use App\Services\DovecotService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Artisan;
 use Inertia\Inertia;
 use Exception;
 
@@ -299,28 +300,43 @@ class MailController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            return back()->withErrors($validator);
         }
 
         try {
-            // Update config file (in production, this would write to .env or database)
-            // For now, just return success
+            // Update .env file with new Roundcube URL
+            $envPath = base_path('.env');
             
-            Log::info("Updated mail settings via web interface");
+            if (file_exists($envPath)) {
+                $envContent = file_get_contents($envPath);
+                $roundcubeUrl = $request->input('roundcube_url');
+                
+                // Check if NPANEL_ROUNDCUBE_URL exists
+                if (preg_match('/^NPANEL_ROUNDCUBE_URL=.*/m', $envContent)) {
+                    // Update existing line
+                    $envContent = preg_replace(
+                        '/^NPANEL_ROUNDCUBE_URL=.*/m',
+                        'NPANEL_ROUNDCUBE_URL=' . $roundcubeUrl,
+                        $envContent
+                    );
+                } else {
+                    // Append new line
+                    $envContent .= "\nNPANEL_ROUNDCUBE_URL=" . $roundcubeUrl;
+                }
+                
+                file_put_contents($envPath, $envContent);
+                
+                // Clear config cache
+                Artisan::call('config:clear');
+            }
+            
+            Log::info("Updated mail settings via web interface", ['roundcube_url' => $request->input('roundcube_url')]);
 
-            return response()->json([
-                'message' => 'Settings updated successfully',
-            ]);
+            return back()->with('success', 'Settings updated successfully');
         } catch (Exception $e) {
             Log::error("Failed to update settings: " . $e->getMessage());
             
-            return response()->json([
-                'message' => 'Failed to update settings',
-                'error' => $e->getMessage(),
-            ], 500);
+            return back()->with('error', 'Failed to update settings: ' . $e->getMessage());
         }
     }
 }

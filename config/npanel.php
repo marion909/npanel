@@ -111,7 +111,7 @@ return [
     |
     */
     'mail_enabled' => env('MAIL_ENABLED', false),
-    'roundcube_url' => env('ROUNDCUBE_URL', 'https://webmail.example.com'),
+    'roundcube_url' => env('NPANEL_ROUNDCUBE_URL', 'https://webmail.example.com'),
     'vmail_base_path' => env('VMAIL_BASE_PATH', '/var/vmail'),
     'vmail_uid' => env('VMAIL_UID', 5000),
     'vmail_gid' => env('VMAIL_GID', 5000),
