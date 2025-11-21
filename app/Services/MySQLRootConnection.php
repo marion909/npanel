@@ -24,13 +24,28 @@ class MySQLRootConnection
         $dsn = "mysql:host={$host};port={$port}";
 
         try {
+            // Try with password first
             $this->connection = new \PDO($dsn, $username, $password, [
                 \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
                 \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
             ]);
         } catch (\PDOException $e) {
-            Log::error('Failed to connect to MySQL as root', ['error' => $e->getMessage()]);
-            throw new \Exception('Failed to connect to MySQL: ' . $e->getMessage());
+            // If password auth fails, try without password (unix socket auth)
+            try {
+                $this->connection = new \PDO($dsn, $username, '', [
+                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                    \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+                ]);
+                Log::warning('MySQL root connected without password (unix socket auth)');
+            } catch (\PDOException $e2) {
+                Log::error('Failed to connect to MySQL as root', [
+                    'error' => $e->getMessage(),
+                    'error2' => $e2->getMessage(),
+                    'host' => $host,
+                    'username' => $username,
+                ]);
+                throw new \Exception('Failed to connect to MySQL. Please check MYSQL_ROOT credentials in .env or run: sudo mysql -e "ALTER USER \'root\'@\'localhost\' IDENTIFIED WITH mysql_native_password BY \'your_password\';"');
+            }
         }
     }
 
