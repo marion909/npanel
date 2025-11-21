@@ -53,4 +53,16 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/domains/{domain}/databases/{database}/suspend', [App\Http\Controllers\DatabaseController::class, 'suspend'])->name('databases.suspend');
     Route::post('/domains/{domain}/databases/{database}/resume', [App\Http\Controllers\DatabaseController::class, 'resume'])->name('databases.resume');
     Route::get('/domains/{domain}/databases/{database}/phpmyadmin', [App\Http\Controllers\DatabaseController::class, 'openPhpMyAdmin'])->name('databases.phpmyadmin');
+    
+    // Mail management
+    Route::get('/mail', [App\Http\Controllers\MailController::class, 'index'])->name('mail.index');
+    Route::post('/mail/mailboxes', [App\Http\Controllers\MailController::class, 'store'])->name('mail.mailboxes.store');
+    Route::put('/mail/mailboxes/{mailbox}', [App\Http\Controllers\MailController::class, 'update'])->name('mail.mailboxes.update');
+    Route::delete('/mail/mailboxes/{mailbox}', [App\Http\Controllers\MailController::class, 'destroy'])->name('mail.mailboxes.destroy');
+    Route::post('/mail/mailboxes/{mailbox}/size', [App\Http\Controllers\MailController::class, 'calculateSize'])->name('mail.mailboxes.size');
+    Route::post('/mail/aliases', [App\Http\Controllers\MailController::class, 'storeAlias'])->name('mail.aliases.store');
+    Route::delete('/mail/aliases/{alias}', [App\Http\Controllers\MailController::class, 'destroyAlias'])->name('mail.aliases.destroy');
+    Route::get('/mail/domains/{domain}/dns', [App\Http\Controllers\MailController::class, 'dnsRecords'])->name('mail.dns');
+    Route::get('/mail/settings', [App\Http\Controllers\MailController::class, 'settings'])->name('mail.settings');
+    Route::post('/mail/settings', [App\Http\Controllers\MailController::class, 'updateSettings'])->name('mail.settings.update');
 });

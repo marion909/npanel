@@ -210,10 +210,26 @@ HTML;
             
             $subdomainIds = $domain->subdomains->pluck('id')->toArray();
 
+            // Check if domain has mailboxes (for cleanup flag)
+            $hasMailboxes = $domain->mailboxes()->exists();
+
             DB::transaction(function () use ($domain) {
                 // Delete subdomains records (configs will be deleted by job)
                 $domain->subdomains()->delete();
                 Log::info("Deleted subdomain records for: {$domain->domain_name}");
+
+                // Delete mailboxes and aliases (cascade will handle this, but explicit for logging)
+                if ($domain->mailboxes()->exists()) {
+                    $mailboxCount = $domain->mailboxes()->count();
+                    $domain->mailboxes()->delete();
+                    Log::info("Deleted {$mailboxCount} mailbox records for: {$domain->domain_name}");
+                }
+
+                if ($domain->mailAliases()->exists()) {
+                    $aliasCount = $domain->mailAliases()->count();
+                    $domain->mailAliases()->delete();
+                    Log::info("Deleted {$aliasCount} alias records for: {$domain->domain_name}");
+                }
 
                 // Delete SSL certificate record but keep files on disk for reuse
                 if ($domain->sslCertificate) {
@@ -246,7 +262,8 @@ HTML;
                 $phpVersion,
                 $phpFpmPool,
                 $databases,
-                $subdomainIds
+                $subdomainIds,
+                $hasMailboxes
             )->delay(now()->addSeconds(2));
 
             Log::info("Cleanup job dispatched for: {$domainName}");

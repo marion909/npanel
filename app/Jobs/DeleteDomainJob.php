@@ -30,7 +30,8 @@ class DeleteDomainJob implements ShouldQueue
         public ?string $phpVersion,
         public ?string $phpFpmPool,
         public array $databases, // Array of ['name' => ..., 'user' => ...]
-        public array $subdomainIds
+        public array $subdomainIds,
+        public bool $hasMailboxes = false
     ) {}
 
     /**
@@ -98,7 +99,26 @@ class DeleteDomainJob implements ShouldQueue
                 }
             }
 
-            // 5. Reload services
+            // 5. Delete maildir if mailboxes existed
+            if ($this->hasMailboxes) {
+                $maildirPath = "/var/vmail/{$this->domainName}";
+                if (File::exists($maildirPath)) {
+                    File::deleteDirectory($maildirPath);
+                    Log::info("Deleted maildir: {$maildirPath}");
+                }
+
+                // Delete DKIM keys
+                $dkimPath = "/etc/opendkim/keys/{$this->domainName}";
+                if (File::exists($dkimPath)) {
+                    File::deleteDirectory($dkimPath);
+                    Log::info("Deleted DKIM keys: {$dkimPath}");
+                }
+
+                // Regenerate OpenDKIM configuration (remove domain entries)
+                $this->updateOpenDKIMConfig();
+            }
+
+            // 6. Reload services
             try {
                 // Test Nginx config before reload
                 $result = Process::run('nginx -t');
@@ -114,6 +134,14 @@ class DeleteDomainJob implements ShouldQueue
                     Process::run("systemctl reload php{$this->phpVersion}-fpm");
                     Log::info("PHP-FPM {$this->phpVersion} reloaded");
                 }
+
+                // Reload mail services if mailboxes existed
+                if ($this->hasMailboxes) {
+                    Process::run('systemctl reload postfix');
+                    Process::run('systemctl reload dovecot');
+                    Process::run('systemctl reload opendkim');
+                    Log::info("Mail services reloaded");
+                }
             } catch (\Exception $e) {
                 Log::error("Failed to reload services: " . $e->getMessage());
             }
@@ -125,6 +153,41 @@ class DeleteDomainJob implements ShouldQueue
                 'trace' => $e->getTraceAsString()
             ]);
             throw $e;
+        }
+    }
+
+    /**
+     * Update OpenDKIM configuration to remove domain entries.
+     */
+    private function updateOpenDKIMConfig(): void
+    {
+        try {
+            $keyTablePath = '/etc/opendkim/KeyTable';
+            $signingTablePath = '/etc/opendkim/SigningTable';
+
+            // Remove lines containing this domain from KeyTable
+            if (File::exists($keyTablePath)) {
+                $keyTableContent = File::get($keyTablePath);
+                $keyTableLines = explode("\n", $keyTableContent);
+                $filteredLines = array_filter($keyTableLines, function($line) {
+                    return !str_contains($line, $this->domainName);
+                });
+                File::put($keyTablePath, implode("\n", $filteredLines));
+            }
+
+            // Remove lines containing this domain from SigningTable
+            if (File::exists($signingTablePath)) {
+                $signingTableContent = File::get($signingTablePath);
+                $signingTableLines = explode("\n", $signingTableContent);
+                $filteredLines = array_filter($signingTableLines, function($line) {
+                    return !str_contains($line, $this->domainName);
+                });
+                File::put($signingTablePath, implode("\n", $filteredLines));
+            }
+
+            Log::info("Updated OpenDKIM configuration to remove {$this->domainName}");
+        } catch (\Exception $e) {
+            Log::error("Failed to update OpenDKIM config: " . $e->getMessage());
         }
     }
 }

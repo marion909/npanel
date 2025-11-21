@@ -670,6 +670,26 @@ print_final_info() {
     echo ""
 }
 
+install_mail_server() {
+    print_status "Installing mail server components (Postfix, Dovecot, OpenDKIM, Roundcube)..."
+    
+    # Check if user wants to install mail server
+    read -p "Do you want to install the mail server? (y/n): " -n 1 -r
+    echo ""
+    
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_warning "Skipping mail server installation"
+        return
+    fi
+    
+    # Run InstallMailServerJob via Artisan
+    cd "$INSTALL_DIR"
+    sudo -u www-data php artisan queue:work --stop-when-empty &
+    sudo -u www-data php artisan npanel:install-mail
+    
+    print_success "Mail server installation dispatched (check queue logs for progress)"
+}
+
 # Main installation flow
 main() {
     echo ""
@@ -699,6 +719,7 @@ main() {
     configure_supervisor
     configure_cron
     create_admin_user
+    install_mail_server
     print_final_info
     
     print_success "Installation completed successfully!"

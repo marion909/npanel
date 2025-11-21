@@ -101,4 +101,18 @@ return [
     */
     'phpmyadmin_url' => env('PHPMYADMIN_URL', 'http://localhost/phpmyadmin'),
     'phpmyadmin_sso_url' => env('PHPMYADMIN_SSO_URL', env('APP_URL') . '/phpmyadmin-sso.php'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mail Server Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Mail server integration settings for Postfix, Dovecot, and Roundcube.
+    |
+    */
+    'mail_enabled' => env('MAIL_ENABLED', false),
+    'roundcube_url' => env('ROUNDCUBE_URL', 'https://webmail.example.com'),
+    'vmail_base_path' => env('VMAIL_BASE_PATH', '/var/vmail'),
+    'vmail_uid' => env('VMAIL_UID', 5000),
+    'vmail_gid' => env('VMAIL_GID', 5000),
 ];

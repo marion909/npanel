@@ -20,6 +20,7 @@ class Domain extends Model
         'ssl_cert_path',
         'ssl_key_path',
         'ssl_expiry_date',
+        'mail_hostname',
         'status',
     ];
 
@@ -58,6 +59,16 @@ class Domain extends Model
         return $this->hasMany(Database::class);
     }
 
+    public function mailboxes(): HasMany
+    {
+        return $this->hasMany(Mailbox::class);
+    }
+
+    public function mailAliases(): HasMany
+    {
+        return $this->hasMany(MailAlias::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';
@@ -70,5 +81,14 @@ class Domain extends Model
         }
 
         return $this->ssl_expiry_date->diffInDays(now()) <= $days;
+    }
+
+    /**
+     * Get the mail hostname for this domain.
+     * Returns the configured value or defaults to mail.{domain}.
+     */
+    public function getMailHostnameAttribute(): string
+    {
+        return $this->attributes['mail_hostname'] ?? "mail.{$this->domain_name}";
     }
 }
