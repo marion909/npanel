@@ -111,6 +111,27 @@ stop_queue_workers() {
 
 start_queue_workers() {
     print_status "Starting queue workers..."
+    
+    # Create supervisor config if it doesn't exist
+    if [ ! -f /etc/supervisor/conf.d/npanel-worker.conf ]; then
+        print_status "Creating supervisor configuration..."
+        cat > /etc/supervisor/conf.d/npanel-worker.conf <<EOF
+[program:npanel-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php ${INSTALL_DIR}/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=root
+numprocs=2
+redirect_stderr=true
+stdout_logfile=${INSTALL_DIR}/storage/logs/worker.log
+stopwaitsecs=3600
+EOF
+        print_success "Supervisor configuration created"
+    fi
+    
     supervisorctl reread 2>/dev/null || true
     supervisorctl update 2>/dev/null || true
     supervisorctl start npanel-worker:* 2>/dev/null || print_warning "Could not start queue workers"
