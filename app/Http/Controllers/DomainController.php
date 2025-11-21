@@ -142,4 +142,34 @@ class DomainController extends Controller
             return Redirect::back()->with('error', 'Failed to update domain: ' . $e->getMessage())->withInput();
         }
     }
+
+    /**
+     * Suspend domain
+     */
+    public function suspend(Domain $domain): RedirectResponse
+    {
+        try {
+            $this->domainService->suspendDomain($domain);
+
+            return Redirect::route('dashboard')->with('success', 'Domain suspended successfully.');
+        } catch (\Exception $e) {
+            \Log::error('Domain suspension failed', ['domain' => $domain->domain_name, 'error' => $e->getMessage()]);
+            return Redirect::back()->with('error', 'Failed to suspend domain: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Resume suspended domain
+     */
+    public function resume(Domain $domain): RedirectResponse
+    {
+        try {
+            $this->domainService->resumeDomain($domain);
+
+            return Redirect::route('dashboard')->with('success', 'Domain resumed successfully.');
+        } catch (\Exception $e) {
+            \Log::error('Domain resume failed', ['domain' => $domain->domain_name, 'error' => $e->getMessage()]);
+            return Redirect::back()->with('error', 'Failed to resume domain: ' . $e->getMessage());
+        }
+    }
 }

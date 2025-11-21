@@ -27,6 +27,8 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/domains/{domain}', [App\Http\Controllers\DomainController::class, 'update'])->name('domains.update');
     Route::delete('/domains/{domain}', [App\Http\Controllers\DomainController::class, 'destroy'])->name('domains.destroy');
     Route::post('/domains/{domain}/ssl', [App\Http\Controllers\DomainController::class, 'issueSSL'])->name('domains.ssl');
+    Route::post('/domains/{domain}/suspend', [App\Http\Controllers\DomainController::class, 'suspend'])->name('domains.suspend');
+    Route::post('/domains/{domain}/resume', [App\Http\Controllers\DomainController::class, 'resume'])->name('domains.resume');
     
     // Subdomain management
     Route::post('/domains/{domain}/subdomains', [App\Http\Controllers\SubdomainController::class, 'store'])->name('subdomains.store');

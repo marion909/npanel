@@ -257,13 +257,17 @@ const viewDomain = (domain) => {
 
 const suspendDomain = (domain) => {
     if (confirm(`Suspend ${domain.domain_name}?`)) {
-        router.post(`/api/domains/${domain.id}/suspend`);
+        router.post(`/domains/${domain.id}/suspend`, {}, {
+            preserveScroll: true,
+        });
     }
 };
 
 const resumeDomain = (domain) => {
     if (confirm(`Resume ${domain.domain_name}?`)) {
-        router.post(`/api/domains/${domain.id}/resume`);
+        router.post(`/domains/${domain.id}/resume`, {}, {
+            preserveScroll: true,
+        });
     }
 };
 </script>
