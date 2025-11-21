@@ -21,32 +21,60 @@ class MySQLRootConnection
         $username = config('database.connections.mysql_root.username', 'root');
         $password = config('database.connections.mysql_root.password', '');
 
-        $dsn = "mysql:host={$host};port={$port}";
+        // Try multiple connection methods
+        $connectionMethods = [
+            // Method 1: Unix socket (for MariaDB/MySQL with auth_socket plugin)
+            [
+                'dsn' => 'mysql:unix_socket=/var/run/mysqld/mysqld.sock',
+                'user' => $username,
+                'pass' => '',
+            ],
+            // Method 2: TCP with password
+            [
+                'dsn' => "mysql:host={$host};port={$port}",
+                'user' => $username,
+                'pass' => $password,
+            ],
+            // Method 3: TCP without password
+            [
+                'dsn' => "mysql:host={$host};port={$port}",
+                'user' => $username,
+                'pass' => '',
+            ],
+        ];
 
-        try {
-            // Try with password first
-            $this->connection = new \PDO($dsn, $username, $password, [
-                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-                \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-            ]);
-        } catch (\PDOException $e) {
-            // If password auth fails, try without password (unix socket auth)
+        $lastError = null;
+        foreach ($connectionMethods as $index => $method) {
             try {
-                $this->connection = new \PDO($dsn, $username, '', [
+                $this->connection = new \PDO($method['dsn'], $method['user'], $method['pass'], [
                     \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
                     \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
                 ]);
-                Log::warning('MySQL root connected without password (unix socket auth)');
-            } catch (\PDOException $e2) {
-                Log::error('Failed to connect to MySQL as root', [
-                    'error' => $e->getMessage(),
-                    'error2' => $e2->getMessage(),
-                    'host' => $host,
-                    'username' => $username,
+                
+                Log::info('MySQL root connection established', [
+                    'method' => $index + 1,
+                    'type' => $index === 0 ? 'unix_socket' : 'tcp',
                 ]);
-                throw new \Exception('Failed to connect to MySQL. Please check MYSQL_ROOT credentials in .env or run: sudo mysql -e "ALTER USER \'root\'@\'localhost\' IDENTIFIED WITH mysql_native_password BY \'your_password\';"');
+                return; // Connection successful
+            } catch (\PDOException $e) {
+                $lastError = $e;
+                continue; // Try next method
             }
         }
+
+        // All methods failed
+        Log::error('Failed to connect to MySQL as root', [
+            'error' => $lastError?->getMessage(),
+            'host' => $host,
+            'username' => $username,
+            'tried_methods' => count($connectionMethods),
+        ]);
+        
+        throw new \Exception(
+            'Failed to connect to MySQL. Tried unix socket and TCP connections. ' .
+            'Please ensure MySQL/MariaDB is running and root has proper permissions. ' .
+            'To set password: sudo mysql -e "ALTER USER \'root\'@\'localhost\' IDENTIFIED BY \'your_password\';"'
+        );
     }
 
     /**
