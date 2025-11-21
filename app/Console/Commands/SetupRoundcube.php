@@ -34,9 +34,15 @@ class SetupRoundcube extends Command
         // On Ubuntu, root MySQL user requires sudo
         $mysqlCmd = ($mysqlUser === 'root') ? 'sudo mysql' : "mysql -h {$mysqlHost} -u {$mysqlUser} -p{$mysqlPass}";
 
+        // Drop existing database if it exists
+        if ($this->confirm('Drop existing roundcube database if it exists?', true)) {
+            $this->info("Dropping existing database...");
+            Process::run("{$mysqlCmd} -e \"DROP DATABASE IF EXISTS roundcube;\"");
+        }
+
         // Create roundcube database
         $this->info("Creating Roundcube database...");
-        $result = Process::run("{$mysqlCmd} -e \"CREATE DATABASE IF NOT EXISTS roundcube CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\"");
+        $result = Process::run("{$mysqlCmd} -e \"CREATE DATABASE roundcube CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\"");
         
         if (!$result->successful()) {
             $this->error("Failed to create database: " . $result->errorOutput());
