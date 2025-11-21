@@ -511,10 +511,10 @@ install_roundcube() {
     
     # Create Nginx vhost
     print_status "Creating Nginx vhost for $WEBMAIL_DOMAIN..."
-    cat > /etc/nginx/sites-available/roundcube.conf <<NGINX_EOF
+    cat > /etc/nginx/sites-available/roundcube.conf <<'NGINX_EOF'
 server {
     listen 80;
-    server_name ${WEBMAIL_DOMAIN};
+    server_name WEBMAIL_DOMAIN_PLACEHOLDER;
 
     # ACME challenge directory
     location /.well-known/acme-challenge/ {
@@ -523,13 +523,13 @@ server {
 
     # Redirect HTTP to HTTPS
     location / {
-        return 301 https://\$server_name\$request_uri;
+        return 301 https://$server_name$request_uri;
     }
 }
 
 server {
     listen 443 ssl http2;
-    server_name ${WEBMAIL_DOMAIN};
+    server_name WEBMAIL_DOMAIN_PLACEHOLDER;
 
     root /var/www/roundcube;
     index index.php index.html;
@@ -544,13 +544,13 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
 
     location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
+        try_files $uri $uri/ /index.php?$query_string;
     }
 
     location ~ \.php$ {
         fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
         fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;
     }
 
@@ -559,6 +559,9 @@ server {
     }
 }
 NGINX_EOF
+    
+    # Replace placeholder with actual domain
+    sed -i "s/WEBMAIL_DOMAIN_PLACEHOLDER/$WEBMAIL_DOMAIN/g" /etc/nginx/sites-available/roundcube.conf
     
     # Enable site
     ln -sf /etc/nginx/sites-available/roundcube.conf /etc/nginx/sites-enabled/00-roundcube.conf
