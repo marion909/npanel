@@ -53,6 +53,11 @@ class Domain extends Model
         return $this->hasOne(NginxConfig::class);
     }
 
+    public function databases(): HasMany
+    {
+        return $this->hasMany(Database::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';

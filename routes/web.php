@@ -44,4 +44,12 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/domains/{domain}/files/delete', [App\Http\Controllers\FileManagerController::class, 'delete'])->name('domains.files.delete');
     Route::get('/domains/{domain}/files/content', [App\Http\Controllers\FileManagerController::class, 'getContent'])->name('domains.files.content');
     Route::post('/domains/{domain}/files/save', [App\Http\Controllers\FileManagerController::class, 'saveContent'])->name('domains.files.save');
+    
+    // Database management
+    Route::get('/domains/{domain}/databases', [App\Http\Controllers\DatabaseController::class, 'index'])->name('databases.index');
+    Route::post('/domains/{domain}/databases', [App\Http\Controllers\DatabaseController::class, 'store'])->name('databases.store');
+    Route::get('/domains/{domain}/databases/{database}', [App\Http\Controllers\DatabaseController::class, 'show'])->name('databases.show');
+    Route::delete('/domains/{domain}/databases/{database}', [App\Http\Controllers\DatabaseController::class, 'destroy'])->name('databases.destroy');
+    Route::post('/domains/{domain}/databases/{database}/suspend', [App\Http\Controllers\DatabaseController::class, 'suspend'])->name('databases.suspend');
+    Route::post('/domains/{domain}/databases/{database}/resume', [App\Http\Controllers\DatabaseController::class, 'resume'])->name('databases.resume');
 });
