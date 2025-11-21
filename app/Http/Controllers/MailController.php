@@ -76,10 +76,7 @@ class MailController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            return back()->withErrors($validator)->withInput();
         }
 
         try {
@@ -100,17 +97,11 @@ class MailController extends Controller
 
             Log::info("Created mailbox {$mailbox->email} via web interface");
 
-            return response()->json([
-                'message' => 'Mailbox created successfully',
-                'data' => $mailbox->load('domain'),
-            ], 201);
+            return back()->with('success', 'Mailbox created successfully');
         } catch (Exception $e) {
             Log::error("Failed to create mailbox: " . $e->getMessage());
             
-            return response()->json([
-                'message' => 'Failed to create mailbox',
-                'error' => $e->getMessage(),
-            ], 500);
+            return back()->with('error', 'Failed to create mailbox: ' . $e->getMessage());
         }
     }
 
@@ -125,10 +116,7 @@ class MailController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            return back()->withErrors($validator)->withInput();
         }
 
         try {
@@ -140,17 +128,11 @@ class MailController extends Controller
 
             Log::info("Updated mailbox {$mailbox->email} via web interface");
 
-            return response()->json([
-                'message' => 'Mailbox updated successfully',
-                'data' => $mailbox->fresh()->load('domain'),
-            ]);
+            return back()->with('success', 'Mailbox updated successfully');
         } catch (Exception $e) {
             Log::error("Failed to update mailbox: " . $e->getMessage());
             
-            return response()->json([
-                'message' => 'Failed to update mailbox',
-                'error' => $e->getMessage(),
-            ], 500);
+            return back()->with('error', 'Failed to update mailbox: ' . $e->getMessage());
         }
     }
 
@@ -172,16 +154,11 @@ class MailController extends Controller
 
             Log::info("Deleted mailbox {$email} via web interface");
 
-            return response()->json([
-                'message' => 'Mailbox deleted successfully',
-            ]);
+            return back()->with('success', 'Mailbox deleted successfully');
         } catch (Exception $e) {
             Log::error("Failed to delete mailbox: " . $e->getMessage());
             
-            return response()->json([
-                'message' => 'Failed to delete mailbox',
-                'error' => $e->getMessage(),
-            ], 500);
+            return back()->with('error', 'Failed to delete mailbox: ' . $e->getMessage());
         }
     }
 
@@ -194,7 +171,7 @@ class MailController extends Controller
             $sizeMb = $this->mailService->calculateMailboxSize($mailbox);
 
             return response()->json([
-                'message' => 'Size calculated successfully',
+                'success' => true,
                 'data' => [
                     'used_mb' => $sizeMb,
                     'quota_mb' => $mailbox->quota_mb,
@@ -206,7 +183,7 @@ class MailController extends Controller
             Log::error("Failed to calculate mailbox size: " . $e->getMessage());
             
             return response()->json([
-                'message' => 'Failed to calculate size',
+                'success' => false,
                 'error' => $e->getMessage(),
             ], 500);
         }
@@ -225,10 +202,7 @@ class MailController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            return back()->withErrors($validator)->withInput();
         }
 
         try {
@@ -247,17 +221,11 @@ class MailController extends Controller
 
             Log::info("Created alias {$alias->source} -> {$alias->destination} via web interface");
 
-            return response()->json([
-                'message' => 'Alias created successfully',
-                'data' => $alias->load('domain'),
-            ], 201);
+            return back()->with('success', 'Alias created successfully');
         } catch (Exception $e) {
             Log::error("Failed to create alias: " . $e->getMessage());
             
-            return response()->json([
-                'message' => 'Failed to create alias',
-                'error' => $e->getMessage(),
-            ], 500);
+            return back()->with('error', 'Failed to create alias: ' . $e->getMessage());
         }
     }
 
@@ -277,16 +245,11 @@ class MailController extends Controller
 
             Log::info("Deleted alias {$source} via web interface");
 
-            return response()->json([
-                'message' => 'Alias deleted successfully',
-            ]);
+            return back()->with('success', 'Alias deleted successfully');
         } catch (Exception $e) {
             Log::error("Failed to delete alias: " . $e->getMessage());
             
-            return response()->json([
-                'message' => 'Failed to delete alias',
-                'error' => $e->getMessage(),
-            ], 500);
+            return back()->with('error', 'Failed to delete alias: ' . $e->getMessage());
         }
     }
 

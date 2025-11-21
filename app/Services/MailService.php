@@ -257,7 +257,7 @@ class MailService
     }
 
     /**
-     * Generate SHA512-CRYPT password hash using doveadm.
+     * Generate SHA512-CRYPT password hash using doveadm or fallback to PHP crypt().
      *
      * @param string $password
      * @return string
@@ -265,17 +265,32 @@ class MailService
      */
     private function generatePasswordHash(string $password): string
     {
-        // Escape password for shell
-        $escapedPassword = escapeshellarg($password);
+        // Check if doveadm is available
+        $checkResult = Process::run('which doveadm');
+        
+        if ($checkResult->successful()) {
+            // Use doveadm if available
+            $escapedPassword = escapeshellarg($password);
+            $result = Process::run("doveadm pw -s SHA512-CRYPT -p {$escapedPassword}");
 
-        $result = Process::run("doveadm pw -s SHA512-CRYPT -p {$escapedPassword}");
-
-        if (!$result->successful()) {
-            Log::error("Failed to generate password hash: " . $result->errorOutput());
-            throw new Exception("Failed to generate password hash. Ensure dovecot is installed.");
+            if ($result->successful()) {
+                return trim($result->output());
+            }
+            
+            Log::warning("doveadm failed, falling back to PHP crypt(): " . $result->errorOutput());
         }
-
-        return trim($result->output());
+        
+        // Fallback to PHP's crypt() with SHA512
+        // Generate random salt (16 characters for SHA512)
+        $salt = substr(str_replace('+', '.', base64_encode(random_bytes(16))), 0, 16);
+        $hash = crypt($password, '$6$' . $salt);
+        
+        if ($hash === false || strlen($hash) < 13) {
+            throw new Exception("Failed to generate password hash using PHP crypt().");
+        }
+        
+        Log::info("Generated password hash using PHP crypt() fallback");
+        return '{SHA512-CRYPT}' . $hash;
     }
 
     /**
