@@ -29,7 +29,7 @@ class DeleteDomainJob implements ShouldQueue
         public string $documentRoot,
         public ?string $phpVersion,
         public ?string $phpFpmPool,
-        public array $databaseIds,
+        public array $databases, // Array of ['name' => ..., 'user' => ...]
         public array $subdomainIds
     ) {}
 
@@ -44,13 +44,23 @@ class DeleteDomainJob implements ShouldQueue
         try {
             Log::info("Starting domain deletion: {$this->domainName}");
 
-            // 1. Delete all databases associated with this domain
-            foreach ($this->databaseIds as $dbId) {
+            // 1. Delete all MySQL databases associated with this domain
+            $mysqlRoot = app(\App\Services\MySQLRootConnection::class);
+            foreach ($this->databases as $dbInfo) {
                 try {
-                    $databaseService->deleteDatabaseById($dbId);
-                    Log::info("Deleted database ID: {$dbId}");
+                    // Drop MySQL database
+                    if ($mysqlRoot->databaseExists($dbInfo['name'])) {
+                        $mysqlRoot->dropDatabase($dbInfo['name']);
+                        Log::info("Dropped MySQL database: {$dbInfo['name']}");
+                    }
+                    
+                    // Drop MySQL user
+                    if ($mysqlRoot->userExists($dbInfo['user'])) {
+                        $mysqlRoot->dropUser($dbInfo['user']);
+                        Log::info("Dropped MySQL user: {$dbInfo['user']}");
+                    }
                 } catch (\Exception $e) {
-                    Log::error("Failed to delete database ID {$dbId}: " . $e->getMessage());
+                    Log::error("Failed to delete database {$dbInfo['name']}: " . $e->getMessage());
                 }
             }
 

@@ -199,7 +199,15 @@ HTML;
             $documentRoot = $domain->document_root;
             $phpVersion = $domain->php_version;
             $phpFpmPool = $domain->php_fpm_pool;
-            $databaseIds = $domain->databases->pluck('id')->toArray();
+            
+            // Collect database info (name and user) before deleting records
+            $databases = $domain->databases->map(function ($db) {
+                return [
+                    'name' => $db->database_name,
+                    'user' => $db->mysql_user,
+                ];
+            })->toArray();
+            
             $subdomainIds = $domain->subdomains->pluck('id')->toArray();
 
             DB::transaction(function () use ($domain) {
@@ -237,7 +245,7 @@ HTML;
                 $documentRoot,
                 $phpVersion,
                 $phpFpmPool,
-                $databaseIds,
+                $databases,
                 $subdomainIds
             )->delay(now()->addSeconds(2));
 
