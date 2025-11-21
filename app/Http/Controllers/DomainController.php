@@ -88,22 +88,32 @@ class DomainController extends Controller
     public function issueSSL(Domain $domain): RedirectResponse
     {
         try {
+            \Log::info('SSL issuance requested', [
+                'domain' => $domain->domain_name,
+                'status' => $domain->status,
+                'ssl_enabled' => $domain->ssl_enabled
+            ]);
+
             // Check if domain is active
             if ($domain->status !== 'active') {
+                \Log::warning('SSL issuance rejected - domain not active', ['domain' => $domain->domain_name]);
                 return Redirect::back()->with('error', 'Domain must be active before issuing SSL certificate.');
             }
 
             // Check if SSL already enabled
             if ($domain->ssl_enabled) {
+                \Log::info('SSL issuance rejected - SSL already enabled', ['domain' => $domain->domain_name]);
                 return Redirect::back()->with('info', 'SSL is already enabled for this domain.');
             }
 
             // Dispatch SSL issuance job
+            \Log::info('Dispatching SSL issuance job', ['domain' => $domain->domain_name]);
             IssueSslCertificateJob::dispatch($domain);
+            \Log::info('SSL issuance job dispatched successfully', ['domain' => $domain->domain_name]);
 
             return Redirect::back()->with('success', 'SSL certificate issuance started. This may take a few minutes.');
         } catch (\Exception $e) {
-            \Log::error('SSL issuance failed', ['domain' => $domain->domain_name, 'error' => $e->getMessage()]);
+            \Log::error('SSL issuance failed', ['domain' => $domain->domain_name, 'error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return Redirect::back()->with('error', 'Failed to issue SSL: ' . $e->getMessage());
         }
     }
