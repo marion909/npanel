@@ -619,7 +619,8 @@ PHP_EOF
     print_status "Issuing SSL certificate for $WEBMAIL_DOMAIN..."
     if [ -f "/root/.acme.sh/acme.sh" ]; then
         cd "${INSTALL_DIR}"
-        sudo -u www-data php artisan npanel:roundcube-ssl --domain="$WEBMAIL_DOMAIN" || \
+        # Run as root, not www-data, because acme.sh is in /root
+        php artisan npanel:roundcube-ssl --domain="$WEBMAIL_DOMAIN" || \
             print_warning "Failed to issue SSL certificate. You can try manually later with: php artisan npanel:roundcube-ssl"
     else
         print_warning "acme.sh installation failed. Roundcube will use self-signed certificate."
