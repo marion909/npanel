@@ -406,71 +406,10 @@ EOF404
     
     chown -R www-data:www-data /var/www/html/error
     
-    # Create main npanel config with IP access and catchall
-    cat > "${NGINX_SITES_AVAILABLE}/npanel.conf" <<EOFNPANEL
-# nPanel Admin Interface - Server IP Access
-server {
-    listen 80;
-    listen [::]:80;
-    server_name ${SERVER_IP};
-    root ${INSTALL_DIR}/public;
-
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
-
-    index index.php;
-
-    charset utf-8;
-
-    location / {
-        try_files \\\$uri \\\$uri/ /index.php?\\\$query_string;
-    }
-
-    location = /favicon.ico { access_log off; log_not_found off; }
-    location = /robots.txt  { access_log off; log_not_found off; }
-
-    error_page 404 /index.php;
-
-    location ~ \\.php\$ {
-        fastcgi_pass unix:/var/run/php/php${DEFAULT_PHP_VERSION}-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME \\\$realpath_root\\\$fastcgi_script_name;
-        include fastcgi_params;
-    }
-
-    location ~ /\\.(?!well-known).* {
-        deny all;
-    }
-}
-
-# Default catchall for unmapped domains
-server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    server_name _;
-    root /var/www/html/error;
-    
-    error_page 404 /404.html;
-    location = /404.html { internal; }
-    location / { return 404; }
-}
-
-server {
-    listen 443 ssl default_server;
-    listen [::]:443 ssl default_server;
-    http2 on;
-    server_name _;
-    
-    ssl_certificate /etc/nginx/ssl/default.crt;
-    ssl_certificate_key /etc/nginx/ssl/default.key;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    
-    root /var/www/html/error;
-    error_page 404 /404.html;
-    location = /404.html { internal; }
-    location / { return 404; }
-}
-EOFNPANEL
+    # Create main npanel config with IP access, phpMyAdmin and catchall
+    # Copy template and replace SERVER_IP placeholder
+    cp "${INSTALL_DIR}/config/nginx/npanel.conf" "${NGINX_SITES_AVAILABLE}/npanel.conf"
+    sed -i "s/SERVER_IP/${SERVER_IP}/g" "${NGINX_SITES_AVAILABLE}/npanel.conf"
     
     # Remove default site
     rm -f "${NGINX_SITES_ENABLED}/default"

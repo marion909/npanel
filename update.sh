@@ -199,6 +199,21 @@ update_permissions() {
 restart_services() {
     print_status "Restarting services..."
     
+    # Update Nginx configuration if template exists
+    if [ -f "${INSTALL_DIR}/config/nginx/npanel.conf" ]; then
+        print_status "Updating Nginx configuration..."
+        SERVER_IP=$(curl -s ifconfig.me || curl -s icanhazip.com || hostname -I | awk '{print $1}')
+        cp "${INSTALL_DIR}/config/nginx/npanel.conf" "/etc/nginx/sites-available/npanel.conf"
+        sed -i "s/SERVER_IP/${SERVER_IP}/g" "/etc/nginx/sites-available/npanel.conf"
+        
+        # Test Nginx config
+        if nginx -t 2>/dev/null; then
+            print_success "Nginx configuration updated"
+        else
+            print_warning "Nginx configuration test failed, keeping old config"
+        fi
+    fi
+    
     # Restart PHP-FPM
     for version in 7.4 8.0 8.1 8.2 8.3; do
         if systemctl is-active --quiet php${version}-fpm; then
