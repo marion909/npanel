@@ -208,17 +208,57 @@ check_env_variables() {
     # Check if MYSQL_ROOT credentials exist
     if ! grep -q "MYSQL_ROOT_PASSWORD" .env; then
         print_warning "MySQL root credentials not found in .env"
-        read -sp "Enter MySQL root password: " MYSQL_ROOT_PASS
-        echo ""
+        print_status "Setting up MySQL admin user for database management..."
         
+        # Generate secure password
+        MYSQL_ADMIN_PASS=$(openssl rand -base64 24)
+        
+        # Create MySQL admin user
+        mysql -e "CREATE USER IF NOT EXISTS 'npanel_admin'@'localhost' IDENTIFIED BY '${MYSQL_ADMIN_PASS}';" 2>/dev/null || \
+        mysql -u root -e "CREATE USER IF NOT EXISTS 'npanel_admin'@'localhost' IDENTIFIED BY '${MYSQL_ADMIN_PASS}';" 2>/dev/null || {
+            print_error "Failed to create MySQL admin user. Please run manually:"
+            echo "sudo mysql -e \"CREATE USER 'npanel_admin'@'localhost' IDENTIFIED BY 'your_password';\""
+            echo "sudo mysql -e \"GRANT ALL PRIVILEGES ON *.* TO 'npanel_admin'@'localhost' WITH GRANT OPTION;\""
+            return 1
+        }
+        
+        # Grant privileges
+        mysql -e "GRANT ALL PRIVILEGES ON *.* TO 'npanel_admin'@'localhost' WITH GRANT OPTION;" 2>/dev/null || \
+        mysql -u root -e "GRANT ALL PRIVILEGES ON *.* TO 'npanel_admin'@'localhost' WITH GRANT OPTION;" 2>/dev/null || {
+            print_error "Failed to grant privileges to MySQL admin user"
+            return 1
+        }
+        
+        mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || mysql -u root -e "FLUSH PRIVILEGES;" 2>/dev/null
+        
+        # Add to .env
         echo "" >> .env
         echo "# MySQL Root Connection for Database Management" >> .env
         echo "MYSQL_ROOT_HOST=127.0.0.1" >> .env
         echo "MYSQL_ROOT_PORT=3306" >> .env
-        echo "MYSQL_ROOT_USERNAME=root" >> .env
-        echo "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASS}" >> .env
+        echo "MYSQL_ROOT_USERNAME=npanel_admin" >> .env
+        echo "MYSQL_ROOT_PASSWORD=${MYSQL_ADMIN_PASS}" >> .env
         
-        print_success "MySQL root credentials added to .env"
+        print_success "MySQL admin user 'npanel_admin' created"
+        print_success "Credentials added to .env"
+        
+        echo ""
+        echo "=========================================="
+        print_warning "MySQL Admin Credentials (SAVE THESE!):"
+        echo "=========================================="
+        echo "Username: npanel_admin"
+        echo "Password: ${MYSQL_ADMIN_PASS}"
+        echo "Host: 127.0.0.1"
+        echo "Port: 3306"
+        echo ""
+        echo "These credentials are stored in: ${INSTALL_DIR}/.env"
+        echo "=========================================="
+        echo ""
+        
+        # Wait for user to see credentials
+        read -p "Press Enter to continue after saving these credentials..."
+    else
+        print_success "MySQL root credentials already configured"
     fi
 }
 
