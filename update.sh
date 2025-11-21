@@ -602,6 +602,19 @@ PHP_EOF
     
     print_success "Roundcube installed at $ROUNDCUBE_PATH"
     
+    # Install acme.sh if not present
+    if [ ! -f "/root/.acme.sh/acme.sh" ]; then
+        print_status "Installing acme.sh for SSL certificate management..."
+        curl -s https://get.acme.sh | sh -s email=admin@$(hostname -f)
+        
+        # Source acme.sh environment
+        if [ -f /root/.acme.sh/acme.sh.env ]; then
+            . /root/.acme.sh/acme.sh.env
+        fi
+        
+        print_success "acme.sh installed"
+    fi
+    
     # Issue SSL certificate
     print_status "Issuing SSL certificate for $WEBMAIL_DOMAIN..."
     if [ -f "/root/.acme.sh/acme.sh" ]; then
@@ -609,8 +622,8 @@ PHP_EOF
         sudo -u www-data php artisan npanel:roundcube-ssl --domain="$WEBMAIL_DOMAIN" || \
             print_warning "Failed to issue SSL certificate. You can try manually later with: php artisan npanel:roundcube-ssl"
     else
-        print_warning "acme.sh not found. Roundcube will use self-signed certificate."
-        print_status "You can issue a certificate later with: php artisan npanel:roundcube-ssl"
+        print_warning "acme.sh installation failed. Roundcube will use self-signed certificate."
+        print_status "You can install acme.sh manually: curl https://get.acme.sh | sh"
     fi
 }
 
