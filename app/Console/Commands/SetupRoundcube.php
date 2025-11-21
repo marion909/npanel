@@ -20,9 +20,13 @@ class SetupRoundcube extends Command
         $mysqlUser = env('MYSQL_ROOT_USERNAME') ?: env('DB_USERNAME', 'root');
         $mysqlPass = env('MYSQL_ROOT_PASSWORD') ?: env('DB_PASSWORD', '');
 
+        // If no password in .env, ask for it
         if (empty($mysqlPass)) {
-            $this->error("No MySQL password found. Set either MYSQL_ROOT_PASSWORD or DB_PASSWORD in .env");
-            return 1;
+            $mysqlPass = $this->secret("Enter MySQL root password");
+            if (empty($mysqlPass)) {
+                $this->error("Password is required");
+                return 1;
+            }
         }
 
         $this->info("Using MySQL connection: {$mysqlUser}@{$mysqlHost}");
