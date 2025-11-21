@@ -186,56 +186,62 @@ HTML;
 
     /**
      * Delete domain and all associated resources
+     * SSL certificates are kept for potential reuse
      */
     public function deleteDomain(Domain $domain): bool
     {
-        $phpVersion = $domain->php_version;
-        
         try {
+            Log::info("Preparing domain deletion: {$domain->domain_name}");
+
+            // Collect data before deletion for async job
+            $databaseIds = $domain->databases->pluck('id')->toArray();
+            $subdomainIds = $domain->subdomains->pluck('id')->toArray();
+
             DB::transaction(function () use ($domain) {
-                // Remove Nginx configuration files
-                $configPath = config('npanel.nginx_sites_available') . '/' . $domain->domain_name . '.conf';
-                $enabledPath = config('npanel.nginx_sites_enabled') . '/' . $domain->domain_name . '.conf';
-                
-                if (File::exists($enabledPath)) {
-                    File::delete($enabledPath);
-                }
-                if (File::exists($configPath)) {
-                    File::delete($configPath);
-                }
-
-                // Remove PHP-FPM pool configuration
-                if ($domain->php_fpm_pool) {
-                    $poolConfigPath = '/etc/php/' . $domain->php_version . '/fpm/pool.d/' . $domain->php_fpm_pool . '.conf';
-                    if (File::exists($poolConfigPath)) {
-                        File::delete($poolConfigPath);
-                    }
-                }
-
-                // Delete subdomains first (foreign key constraint)
+                // Delete subdomains records (configs will be deleted by job)
                 $domain->subdomains()->delete();
+                Log::info("Deleted subdomain records for: {$domain->domain_name}");
 
-                // Delete SSL certificate record
+                // Delete SSL certificate record but keep files on disk for reuse
                 if ($domain->sslCertificate) {
+                    Log::info("Keeping SSL certificate files for potential reuse: {$domain->domain_name}");
                     $domain->sslCertificate->delete();
                 }
 
-                // Delete PHP-FPM pool record
+                // Delete PHP-FPM pool record (config will be deleted by job)
                 if ($domain->phpFpmPool) {
                     $domain->phpFpmPool->delete();
                 }
 
-                // Hard delete domain record
-                $domain->delete();
+                // Delete Nginx config record (file will be deleted by job)
+                if ($domain->nginxConfig) {
+                    $domain->nginxConfig->delete();
+                }
+
+                // Delete database records (MySQL databases will be deleted by job)
+                // Note: Not deleting actual DBs here, job will do it
+                
+                // Mark domain as deleted but keep record temporarily for job
+                $domain->update(['status' => 'deleting']);
             });
-            
-            // Reload services asynchronously to avoid killing the current request
-            \App\Jobs\ReloadServicesJob::dispatch($phpVersion, true, true)
-                ->delay(now()->addSeconds(3));
+
+            // Dispatch async job to clean up files, configs, and databases
+            \App\Jobs\DeleteDomainJob::dispatch(
+                $domain->domain_name,
+                $domain->document_root,
+                $domain->php_version,
+                $domain->php_fpm_pool,
+                $databaseIds,
+                $subdomainIds
+            )->delay(now()->addSeconds(2));
+
+            // Delete domain record after job is dispatched
+            $domain->delete();
+            Log::info("Domain record deleted, cleanup job dispatched: {$domain->domain_name}");
             
             return true;
         } catch (\Exception $e) {
-            \Log::error('Failed to delete domain', [
+            Log::error('Failed to delete domain', [
                 'domain' => $domain->domain_name,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()

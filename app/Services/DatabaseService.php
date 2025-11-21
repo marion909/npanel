@@ -115,6 +115,29 @@ class DatabaseService
     }
 
     /**
+     * Delete a database by ID (for use in jobs where model might not be available)
+     */
+    public function deleteDatabaseById(int $databaseId): bool
+    {
+        try {
+            $database = Database::find($databaseId);
+            
+            if (!$database) {
+                Log::warning('Database not found for deletion', ['id' => $databaseId]);
+                return false;
+            }
+
+            return $this->deleteDatabase($database);
+        } catch (\Exception $e) {
+            Log::error('Database deletion by ID failed', [
+                'id' => $databaseId,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
      * Get all databases for a domain
      */
     public function getDomainDatabases(Domain $domain): Collection

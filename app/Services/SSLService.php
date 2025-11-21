@@ -23,6 +23,13 @@ class SSLService
      */
     public function issueCertificate(Domain $domain): SslCertificate
     {
+        // Check if certificate already exists and is valid
+        $existingCert = $this->checkExistingCertificate($domain->domain_name);
+        if ($existingCert) {
+            Log::info("Reusing existing SSL certificate for {$domain->domain_name}");
+            return $this->applyCertificate($domain, $existingCert);
+        }
+
         // Create ACME challenge directory
         $this->createAcmeChallenge($domain);
 
@@ -59,6 +66,87 @@ class SSLService
                 'provider' => 'letsencrypt',
                 'issue_date' => now(),
                 'expiry_date' => now()->addDays(90),
+                'auto_renew' => true,
+            ]
+        );
+
+        // Update domain with SSL paths
+        $domain->update([
+            'ssl_enabled' => true,
+            'ssl_cert_path' => $certificate->certificate_path,
+            'ssl_key_path' => $certificate->private_key_path,
+            'ssl_expiry_date' => $certificate->expiry_date,
+        ]);
+
+        // Regenerate Nginx config with SSL
+        app(NginxService::class)->writeConfig(
+            $domain->domain_name,
+            app(NginxService::class)->generateDomainConfig($domain->fresh())
+        );
+
+        return $certificate;
+    }
+
+    /**
+     * Check if existing valid certificate exists for domain
+     */
+    protected function checkExistingCertificate(string $domainName): ?array
+    {
+        $certPath = $this->getCertPath($domainName);
+        $keyPath = $this->getKeyPath($domainName);
+        $chainPath = $this->getChainPath($domainName);
+
+        // Check if files exist
+        if (!File::exists($certPath) || !File::exists($keyPath)) {
+            return null;
+        }
+
+        // Check if certificate is still valid (not expired)
+        try {
+            $certData = openssl_x509_parse(File::get($certPath));
+            if (!$certData) {
+                return null;
+            }
+
+            $expiryDate = \Carbon\Carbon::createFromTimestamp($certData['validTo_time_t']);
+            
+            // Certificate must be valid for at least 30 more days
+            if ($expiryDate->lt(now()->addDays(30))) {
+                Log::info("Existing certificate for {$domainName} expires soon, will issue new one");
+                return null;
+            }
+
+            Log::info("Found valid existing certificate for {$domainName}", [
+                'expiry' => $expiryDate->toDateTimeString()
+            ]);
+
+            return [
+                'certificate_path' => $certPath,
+                'private_key_path' => $keyPath,
+                'chain_path' => $chainPath,
+                'expiry_date' => $expiryDate,
+            ];
+        } catch (\Exception $e) {
+            Log::warning("Failed to parse existing certificate for {$domainName}: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Apply existing certificate to domain
+     */
+    protected function applyCertificate(Domain $domain, array $certData): SslCertificate
+    {
+        // Create or update SSL certificate record
+        $certificate = SslCertificate::updateOrCreate(
+            ['domain_id' => $domain->id],
+            [
+                'certificate_path' => $certData['certificate_path'],
+                'private_key_path' => $certData['private_key_path'],
+                'chain_path' => $certData['chain_path'],
+                'provider' => 'letsencrypt',
+                'issue_date' => now(),
+                'expiry_date' => $certData['expiry_date'],
                 'auto_renew' => true,
             ]
         );
