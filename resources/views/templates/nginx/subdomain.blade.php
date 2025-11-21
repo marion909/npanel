@@ -54,9 +54,15 @@ server {
         expires 365d;
         add_header Cache-Control "public, immutable";
     }
+
+    # Allow Let's Encrypt ACME Challenge
+    location ^~ /.well-known/acme-challenge/ {
+        allow all;
+        default_type "text/plain";
+    }
     
-    # Security: Deny Access to Hidden Files
-    location ~ /\. {
+    # Security: Deny Access to Hidden Files (except .well-known)
+    location ~ /\.(?!well-known) {
         deny all;
     }
 }
