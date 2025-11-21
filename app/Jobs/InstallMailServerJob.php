@@ -427,8 +427,8 @@ EOF;
             }
 
             // Issue certificate using HTTP-01 challenge
-            $issueCmd = "{$acmePath} --issue -d {$webmailDomain} -w {$webrootPath} --force";
-            $result = Process::run($issueCmd);
+            $issueCmd = "{$acmePath} --issue -d {$webmailDomain} -w {$webrootPath} --server letsencrypt --force";
+            $result = Process::timeout(300)->run($issueCmd);
 
             if (!$result->successful()) {
                 Log::warning("Failed to issue SSL certificate for {$webmailDomain}: " . $result->errorOutput());
@@ -448,7 +448,7 @@ EOF;
                 "--fullchain-file {$certDir}/fullchain.pem " .
                 "--reloadcmd 'systemctl reload nginx'";
 
-            $installResult = Process::run($installCmd);
+            $installResult = Process::timeout(120)->run($installCmd);
 
             if (!$installResult->successful()) {
                 Log::warning("Failed to install SSL certificate: " . $installResult->errorOutput());
