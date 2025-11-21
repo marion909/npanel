@@ -109,6 +109,9 @@ pull_latest_code() {
     print_status "Pulling latest code from repository..."
     cd "${INSTALL_DIR}"
     
+    # Remove update.sh if it exists (will be recreated from repo)
+    rm -f update.sh
+    
     # Stash any local changes
     git stash 2>/dev/null || true
     
