@@ -561,7 +561,7 @@ server {
 NGINX_EOF
     
     # Enable site
-    ln -sf /etc/nginx/sites-available/roundcube.conf /etc/nginx/sites-enabled/
+    ln -sf /etc/nginx/sites-available/roundcube.conf /etc/nginx/sites-enabled/00-roundcube.conf
     
     # Test and reload Nginx
     nginx -t && systemctl reload nginx
