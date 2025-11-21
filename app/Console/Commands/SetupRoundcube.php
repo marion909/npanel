@@ -31,9 +31,12 @@ class SetupRoundcube extends Command
 
         $this->info("Using MySQL connection: {$mysqlUser}@{$mysqlHost}");
 
+        // On Ubuntu, root MySQL user requires sudo
+        $mysqlCmd = ($mysqlUser === 'root') ? 'sudo mysql' : "mysql -h {$mysqlHost} -u {$mysqlUser} -p{$mysqlPass}";
+
         // Create roundcube database
         $this->info("Creating Roundcube database...");
-        $result = Process::run("mysql -h {$mysqlHost} -u {$mysqlUser} -p{$mysqlPass} -e \"CREATE DATABASE IF NOT EXISTS roundcube CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\"");
+        $result = Process::run("{$mysqlCmd} -e \"CREATE DATABASE IF NOT EXISTS roundcube CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\"");
         
         if (!$result->successful()) {
             $this->error("Failed to create database: " . $result->errorOutput());
@@ -50,7 +53,7 @@ class SetupRoundcube extends Command
             return 1;
         }
 
-        $result = Process::run("mysql -h {$mysqlHost} -u {$mysqlUser} -p{$mysqlPass} roundcube < {$schemaFile}");
+        $result = Process::run("{$mysqlCmd} roundcube < {$schemaFile}");
         
         if (!$result->successful()) {
             $this->error("Failed to import schema: " . $result->errorOutput());
@@ -82,7 +85,7 @@ class SetupRoundcube extends Command
 
         // Test database connection
         $this->info("Testing database connection...");
-        $result = Process::run("mysql -h {$mysqlHost} -u {$mysqlUser} -p{$mysqlPass} roundcube -e \"SHOW TABLES;\"");
+        $result = Process::run("{$mysqlCmd} roundcube -e \"SHOW TABLES;\"");
         
         if (!$result->successful()) {
             $this->error("Database connection test failed");
