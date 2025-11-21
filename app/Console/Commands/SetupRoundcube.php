@@ -15,15 +15,17 @@ class SetupRoundcube extends Command
     {
         $this->info("Setting up Roundcube...");
 
-        // Get MySQL root credentials from .env
-        $mysqlHost = env('MYSQL_ROOT_HOST', '127.0.0.1');
-        $mysqlUser = env('MYSQL_ROOT_USERNAME', 'root');
-        $mysqlPass = env('MYSQL_ROOT_PASSWORD', '');
+        // Try MySQL root credentials first, fallback to regular DB credentials
+        $mysqlHost = env('MYSQL_ROOT_HOST') ?: env('DB_HOST', '127.0.0.1');
+        $mysqlUser = env('MYSQL_ROOT_USERNAME') ?: env('DB_USERNAME', 'root');
+        $mysqlPass = env('MYSQL_ROOT_PASSWORD') ?: env('DB_PASSWORD', '');
 
         if (empty($mysqlPass)) {
-            $this->error("MYSQL_ROOT_PASSWORD not set in .env");
+            $this->error("No MySQL password found. Set either MYSQL_ROOT_PASSWORD or DB_PASSWORD in .env");
             return 1;
         }
+
+        $this->info("Using MySQL connection: {$mysqlUser}@{$mysqlHost}");
 
         // Create roundcube database
         $this->info("Creating Roundcube database...");
