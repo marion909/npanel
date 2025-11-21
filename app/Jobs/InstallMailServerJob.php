@@ -44,6 +44,7 @@ class InstallMailServerJob implements ShouldQueue
             $this->configureDovecot();
             $this->configureOpenDKIM();
             $this->installRoundcube();
+            $this->issueRoundcubeSSL();
             $this->startServices();
 
             Log::info("Mail server installation completed successfully");
@@ -281,8 +282,15 @@ server {
     listen 80;
     server_name {$webmailDomain};
 
+    # ACME challenge directory
+    location /.well-known/acme-challenge/ {
+        root /var/www/roundcube;
+    }
+
     # Redirect HTTP to HTTPS
-    return 301 https://\$server_name\$request_uri;
+    location / {
+        return 301 https://\$server_name\$request_uri;
+    }
 }
 
 server {
@@ -292,7 +300,7 @@ server {
     root /var/www/roundcube;
     index index.php index.html;
 
-    # SSL Configuration (self-signed initially, replace with Let's Encrypt)
+    # SSL Configuration (self-signed initially, will be replaced with Let's Encrypt)
     ssl_certificate /etc/ssl/certs/ssl-cert-snakeoil.pem;
     ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;
 
@@ -388,6 +396,145 @@ EOF;
         Process::run("chmod 640 {$configPath}");
 
         Log::info("Roundcube configured");
+    }
+
+    /**
+     * Issue SSL certificate for Roundcube domain.
+     */
+    private function issueRoundcubeSSL(): void
+    {
+        Log::info("Issuing SSL certificate for Roundcube...");
+
+        $hostnameResult = Process::run('hostname -f');
+        $hostname = trim($hostnameResult->output());
+        $webmailDomain = "webmail.{$hostname}";
+
+        try {
+            // Get acme.sh path from config
+            $acmePath = config('npanel.acme_sh_path', '/root/.acme.sh/acme.sh');
+
+            if (!File::exists($acmePath)) {
+                Log::warning("acme.sh not found at {$acmePath}. Skipping SSL certificate issuance.");
+                Log::info("You can manually issue certificate later with: {$acmePath} --issue -d {$webmailDomain} -w /var/www/roundcube");
+                return;
+            }
+
+            // Create .well-known/acme-challenge directory
+            $webrootPath = '/var/www/roundcube';
+            $challengeDir = "{$webrootPath}/.well-known/acme-challenge";
+            if (!File::exists($challengeDir)) {
+                File::makeDirectory($challengeDir, 0755, true);
+            }
+
+            // Issue certificate using HTTP-01 challenge
+            $issueCmd = "{$acmePath} --issue -d {$webmailDomain} -w {$webrootPath} --force";
+            $result = Process::run($issueCmd);
+
+            if (!$result->successful()) {
+                Log::warning("Failed to issue SSL certificate for {$webmailDomain}: " . $result->errorOutput());
+                Log::info("Roundcube will continue using self-signed certificate. You can issue certificate manually later.");
+                return;
+            }
+
+            // Install certificate
+            $certDir = "/etc/letsencrypt/live/{$webmailDomain}";
+            if (!File::exists($certDir)) {
+                File::makeDirectory($certDir, 0755, true);
+            }
+
+            $installCmd = "{$acmePath} --install-cert -d {$webmailDomain} " .
+                "--cert-file {$certDir}/cert.pem " .
+                "--key-file {$certDir}/privkey.pem " .
+                "--fullchain-file {$certDir}/fullchain.pem " .
+                "--reloadcmd 'systemctl reload nginx'";
+
+            $installResult = Process::run($installCmd);
+
+            if (!$installResult->successful()) {
+                Log::warning("Failed to install SSL certificate: " . $installResult->errorOutput());
+                return;
+            }
+
+            // Update Nginx configuration to use Let's Encrypt certificate
+            $this->updateRoundcubeVhostSSL($webmailDomain, $certDir);
+
+            Log::info("SSL certificate issued and installed for {$webmailDomain}");
+
+        } catch (Exception $e) {
+            Log::error("Error issuing SSL certificate for Roundcube: " . $e->getMessage());
+            Log::info("Roundcube will continue using self-signed certificate.");
+        }
+    }
+
+    /**
+     * Update Roundcube Nginx vhost to use Let's Encrypt certificate.
+     */
+    private function updateRoundcubeVhostSSL(string $webmailDomain, string $certDir): void
+    {
+        $nginxConf = <<<EOF
+server {
+    listen 80;
+    server_name {$webmailDomain};
+
+    # ACME challenge
+    location /.well-known/acme-challenge/ {
+        root /var/www/roundcube;
+    }
+
+    # Redirect HTTP to HTTPS
+    location / {
+        return 301 https://\$server_name\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name {$webmailDomain};
+
+    root /var/www/roundcube;
+    index index.php index.html;
+
+    # SSL Configuration - Let's Encrypt
+    ssl_certificate {$certDir}/fullchain.pem;
+    ssl_certificate_key {$certDir}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location ~ \.php\$ {
+        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(ht|svn|git) {
+        deny all;
+    }
+}
+
+EOF;
+
+        File::put("/etc/nginx/sites-available/roundcube.conf", $nginxConf);
+
+        // Test and reload Nginx
+        $testResult = Process::run('nginx -t');
+        if ($testResult->successful()) {
+            Process::run('systemctl reload nginx');
+            Log::info("Roundcube Nginx vhost updated with SSL certificate");
+        } else {
+            Log::error("Nginx config test failed after SSL update: " . $testResult->errorOutput());
+        }
     }
 
     /**

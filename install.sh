@@ -745,9 +745,157 @@ install_mail_server() {
     # Reload services with new configs
     systemctl reload postfix dovecot opendkim
     
+    # Install Roundcube webmail
+    print_status "Installing Roundcube webmail..."
+    install_roundcube
+    
     print_success "Mail server installation completed!"
     print_status "You can now create mailboxes via the web interface"
-    print_status "Webmail will be available after configuring a domain"
+    print_status "Webmail will be available at: https://webmail.$(hostname -f)"
+}
+
+install_roundcube() {
+    local ROUNDCUBE_VERSION="1.6.5"
+    local ROUNDCUBE_PATH="/var/www/roundcube"
+    local WEBMAIL_DOMAIN="webmail.$(hostname -f)"
+    
+    # Check if already installed
+    if [ -d "$ROUNDCUBE_PATH" ]; then
+        print_warning "Roundcube already installed at $ROUNDCUBE_PATH"
+        return
+    fi
+    
+    # Download Roundcube
+    print_status "Downloading Roundcube ${ROUNDCUBE_VERSION}..."
+    cd /tmp
+    wget -q "https://github.com/roundcube/roundcubemail/releases/download/${ROUNDCUBE_VERSION}/roundcubemail-${ROUNDCUBE_VERSION}-complete.tar.gz"
+    
+    # Extract
+    print_status "Extracting Roundcube..."
+    tar -xzf "roundcubemail-${ROUNDCUBE_VERSION}-complete.tar.gz" -C /var/www/
+    mv "/var/www/roundcubemail-${ROUNDCUBE_VERSION}" "$ROUNDCUBE_PATH"
+    rm "roundcubemail-${ROUNDCUBE_VERSION}-complete.tar.gz"
+    
+    # Set permissions
+    chown -R www-data:www-data "$ROUNDCUBE_PATH"
+    chmod 755 "$ROUNDCUBE_PATH"
+    
+    # Create Nginx vhost
+    print_status "Creating Nginx vhost for $WEBMAIL_DOMAIN..."
+    cat > /etc/nginx/sites-available/roundcube.conf <<'NGINX_EOF'
+server {
+    listen 80;
+    server_name WEBMAIL_DOMAIN_PLACEHOLDER;
+
+    # ACME challenge directory
+    location /.well-known/acme-challenge/ {
+        root /var/www/roundcube;
+    }
+
+    # Redirect HTTP to HTTPS
+    location / {
+        return 301 https://$server_name$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name WEBMAIL_DOMAIN_PLACEHOLDER;
+
+    root /var/www/roundcube;
+    index index.php index.html;
+
+    # SSL Configuration (self-signed initially)
+    ssl_certificate /etc/ssl/certs/ssl-cert-snakeoil.pem;
+    ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(ht|svn|git) {
+        deny all;
+    }
+}
+NGINX_EOF
+    
+    # Replace placeholder
+    sed -i "s/WEBMAIL_DOMAIN_PLACEHOLDER/$WEBMAIL_DOMAIN/g" /etc/nginx/sites-available/roundcube.conf
+    
+    # Enable site
+    ln -sf /etc/nginx/sites-available/roundcube.conf /etc/nginx/sites-enabled/
+    
+    # Test and reload Nginx
+    nginx -t && systemctl reload nginx
+    
+    # Configure Roundcube
+    print_status "Configuring Roundcube..."
+    cat > "$ROUNDCUBE_PATH/config/config.inc.php" <<'PHP_EOF'
+<?php
+$config = [];
+
+// Database connection
+$config['db_dsnw'] = 'mysql://DB_USER_PLACEHOLDER:DB_PASS_PLACEHOLDER@localhost/DB_NAME_PLACEHOLDER';
+
+// IMAP/SMTP settings
+$config['default_host'] = 'ssl://localhost';
+$config['default_port'] = 993;
+$config['smtp_host'] = 'tls://localhost';
+$config['smtp_port'] = 587;
+$config['smtp_user'] = '%u';
+$config['smtp_pass'] = '%p';
+
+// Security
+$config['des_key'] = 'RANDOM_KEY_PLACEHOLDER';
+$config['cipher_method'] = 'AES-256-CBC';
+
+// UI
+$config['product_name'] = 'nPanel Webmail';
+$config['support_url'] = '';
+$config['skin'] = 'elastic';
+
+// Misc
+$config['enable_installer'] = false;
+$config['log_driver'] = 'syslog';
+$config['syslog_facility'] = LOG_MAIL;
+PHP_EOF
+    
+    # Generate random DES key
+    local RANDOM_KEY=$(openssl rand -base64 24)
+    
+    # Replace placeholders
+    sed -i "s/DB_USER_PLACEHOLDER/$DB_USER/g" "$ROUNDCUBE_PATH/config/config.inc.php"
+    sed -i "s/DB_PASS_PLACEHOLDER/$DB_PASSWORD/g" "$ROUNDCUBE_PATH/config/config.inc.php"
+    sed -i "s/DB_NAME_PLACEHOLDER/$DB_NAME/g" "$ROUNDCUBE_PATH/config/config.inc.php"
+    sed -i "s/RANDOM_KEY_PLACEHOLDER/$RANDOM_KEY/g" "$ROUNDCUBE_PATH/config/config.inc.php"
+    
+    chown www-data:www-data "$ROUNDCUBE_PATH/config/config.inc.php"
+    chmod 640 "$ROUNDCUBE_PATH/config/config.inc.php"
+    
+    print_success "Roundcube installed at $ROUNDCUBE_PATH"
+    
+    # Issue SSL certificate
+    print_status "Issuing SSL certificate for $WEBMAIL_DOMAIN..."
+    if [ -f "/root/.acme.sh/acme.sh" ]; then
+        cd "$INSTALL_DIR"
+        sudo -u www-data php artisan npanel:roundcube-ssl --domain="$WEBMAIL_DOMAIN" || \
+            print_warning "Failed to issue SSL certificate. You can try manually later with: php artisan npanel:roundcube-ssl"
+    else
+        print_warning "acme.sh not found. Roundcube will use self-signed certificate."
+        print_status "You can issue a certificate later with: php artisan npanel:roundcube-ssl"
+    fi
 }
 
 # Main installation flow

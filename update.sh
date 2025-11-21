@@ -374,9 +374,66 @@ check_mail_server_update() {
             systemctl reload dovecot || print_warning "Could not reload Dovecot"
         fi
         
+        # Check Roundcube installation
+        check_roundcube_update
+        
         print_success "Mail server configurations updated"
     else
         print_status "Mail server not installed. Skipping mail configuration update."
+    fi
+}
+
+check_roundcube_update() {
+    local ROUNDCUBE_PATH="/var/www/roundcube"
+    local WEBMAIL_DOMAIN="webmail.$(hostname -f)"
+    
+    # Check if Roundcube is installed
+    if [ ! -d "$ROUNDCUBE_PATH" ]; then
+        print_status "Roundcube not installed. Skipping."
+        return
+    fi
+    
+    print_status "Checking Roundcube SSL certificate..."
+    
+    # Check if SSL certificate exists
+    local CERT_DIR="/etc/letsencrypt/live/$WEBMAIL_DOMAIN"
+    
+    if [ -f "$CERT_DIR/fullchain.pem" ]; then
+        # Certificate exists, check expiry
+        local EXPIRY_DATE=$(openssl x509 -enddate -noout -in "$CERT_DIR/fullchain.pem" | cut -d= -f2)
+        local EXPIRY_EPOCH=$(date -d "$EXPIRY_DATE" +%s)
+        local NOW_EPOCH=$(date +%s)
+        local DAYS_LEFT=$(( ($EXPIRY_EPOCH - $NOW_EPOCH) / 86400 ))
+        
+        if [ $DAYS_LEFT -lt 30 ]; then
+            print_warning "SSL certificate expires in $DAYS_LEFT days. Consider renewing."
+        else
+            print_status "SSL certificate valid for $DAYS_LEFT days"
+        fi
+    else
+        # No Let's Encrypt certificate, check if using self-signed
+        local NGINX_CONF="/etc/nginx/sites-available/roundcube.conf"
+        if [ -f "$NGINX_CONF" ] && grep -q "ssl-cert-snakeoil" "$NGINX_CONF"; then
+            print_warning "Roundcube is using self-signed certificate"
+            print_status "Issue SSL certificate with: php artisan npanel:roundcube-ssl"
+            
+            # Offer to issue certificate now
+            if [ "$AUTO_YES" = false ]; then
+                read -p "Would you like to issue SSL certificate now? (y/n): " -n 1 -r
+                echo ""
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    cd "${INSTALL_DIR}"
+                    sudo -u www-data php artisan npanel:roundcube-ssl --domain="$WEBMAIL_DOMAIN" || \
+                        print_warning "Failed to issue SSL certificate"
+                fi
+            fi
+        fi
+    fi
+    
+    # Check Roundcube version
+    if [ -f "$ROUNDCUBE_PATH/index.php" ]; then
+        local CURRENT_VERSION=$(grep -oP "define\('RCMAIL_VERSION', '\K[^']+(?=')" "$ROUNDCUBE_PATH/program/include/iniset.php" 2>/dev/null || echo "unknown")
+        print_status "Roundcube version: $CURRENT_VERSION"
     fi
 }
 
