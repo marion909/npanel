@@ -195,6 +195,10 @@ HTML;
             Log::info("Preparing domain deletion: {$domain->domain_name}");
 
             // Collect data before deletion for async job
+            $domainName = $domain->domain_name;
+            $documentRoot = $domain->document_root;
+            $phpVersion = $domain->php_version;
+            $phpFpmPool = $domain->php_fpm_pool;
             $databaseIds = $domain->databases->pluck('id')->toArray();
             $subdomainIds = $domain->subdomains->pluck('id')->toArray();
 
@@ -219,31 +223,30 @@ HTML;
                     $domain->nginxConfig->delete();
                 }
 
-                // Delete database records (MySQL databases will be deleted by job)
-                // Note: Not deleting actual DBs here, job will do it
+                // Delete database records from panel (MySQL databases will be deleted by job)
+                $domain->databases()->delete();
                 
-                // Mark domain as deleted but keep record temporarily for job
-                $domain->update(['status' => 'deleting']);
+                // Delete domain record
+                $domain->delete();
+                Log::info("Domain record deleted from database: {$domain->domain_name}");
             });
 
-            // Dispatch async job to clean up files, configs, and databases
+            // Dispatch async job to clean up files, configs, and actual MySQL databases
             \App\Jobs\DeleteDomainJob::dispatch(
-                $domain->domain_name,
-                $domain->document_root,
-                $domain->php_version,
-                $domain->php_fpm_pool,
+                $domainName,
+                $documentRoot,
+                $phpVersion,
+                $phpFpmPool,
                 $databaseIds,
                 $subdomainIds
             )->delay(now()->addSeconds(2));
 
-            // Delete domain record after job is dispatched
-            $domain->delete();
-            Log::info("Domain record deleted, cleanup job dispatched: {$domain->domain_name}");
+            Log::info("Cleanup job dispatched for: {$domainName}");
             
             return true;
         } catch (\Exception $e) {
             Log::error('Failed to delete domain', [
-                'domain' => $domain->domain_name,
+                'domain' => $domainName ?? 'unknown',
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
