@@ -323,7 +323,7 @@
 
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, onUnmounted } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({
@@ -418,7 +418,8 @@ const issueSSL = () => {
     if (confirm(`Issue SSL certificate for ${props.domain.domain_name}? This will request a free Let's Encrypt certificate.`)) {
         router.post(`/domains/${props.domain.id}/ssl`, {}, {
             onSuccess: () => {
-                // Success message handled by controller
+                // Start polling to check SSL status
+                startSslPolling();
             },
             onError: (errors) => {
                 alert('Failed to issue SSL: ' + Object.values(errors).join(', '));
@@ -426,6 +427,43 @@ const issueSSL = () => {
         });
     }
 };
+
+// Poll for SSL status updates
+let sslPollingInterval = null;
+const startSslPolling = () => {
+    // Clear any existing interval
+    if (sslPollingInterval) {
+        clearInterval(sslPollingInterval);
+    }
+    
+    // Poll every 5 seconds for up to 5 minutes
+    let pollCount = 0;
+    const maxPolls = 60; // 5 minutes
+    
+    sslPollingInterval = setInterval(() => {
+        pollCount++;
+        
+        // Reload page data
+        router.reload({
+            only: ['domain'],
+            preserveScroll: true,
+            onSuccess: () => {
+                // Stop polling if SSL is enabled or max attempts reached
+                if (props.domain.ssl_enabled || pollCount >= maxPolls) {
+                    clearInterval(sslPollingInterval);
+                    sslPollingInterval = null;
+                }
+            }
+        });
+    }, 5000);
+};
+
+// Cleanup on unmount
+onUnmounted(() => {
+    if (sslPollingInterval) {
+        clearInterval(sslPollingInterval);
+    }
+});
 
 const addSubdomain = () => {
     if (!newSubdomain.value.subdomain_name) return;
