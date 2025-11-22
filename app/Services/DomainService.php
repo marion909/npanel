@@ -333,12 +333,14 @@ HTML;
         // Update domain status
         $domain->update(['status' => 'suspended']);
         
-        // Generate suspended config for main domain
+        // Generate suspended config for main domain (this also handles @ subdomain)
         $this->nginxService->generateSuspendedConfig($domain);
         
-        // Generate suspended configs for all subdomains
+        // Generate suspended configs for all subdomains (except @ which is handled by main domain)
         foreach ($domain->subdomains as $subdomain) {
-            $this->nginxService->generateSuspendedConfigForSubdomain($subdomain);
+            if ($subdomain->subdomain_name !== '@') {
+                $this->nginxService->generateSuspendedConfigForSubdomain($subdomain);
+            }
         }
         
         $this->nginxService->reload();
@@ -357,12 +359,13 @@ HTML;
         $this->nginxService->writeConfig($domain->domain_name, $config);
         $this->nginxService->enableSite($domain->domain_name);
         
-        // Regenerate normal configs for all subdomains
+        // Regenerate normal configs for all subdomains (except @ which is handled by main domain)
         foreach ($domain->subdomains as $subdomain) {
-            $subdomainFullName = $subdomain->subdomain_name === '@' 
-                ? $domain->domain_name 
-                : $subdomain->subdomain_name . '.' . $domain->domain_name;
+            if ($subdomain->subdomain_name === '@') {
+                continue;
+            }
             
+            $subdomainFullName = $subdomain->subdomain_name . '.' . $domain->domain_name;
             $config = $this->nginxService->generateSubdomainConfig($subdomain);
             $this->nginxService->writeConfig($subdomainFullName, $config);
             $this->nginxService->enableSite($subdomainFullName);
