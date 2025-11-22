@@ -25,6 +25,7 @@ class SettingsController extends Controller
             'default_php_version' => config('npanel.default_php_version'),
             'nginx_sites_available' => config('npanel.nginx_sites_available'),
             'nginx_sites_enabled' => config('npanel.nginx_sites_enabled'),
+            'panel_url' => config('npanel.panel_url'),
             
             // SSL settings
             'acme_sh_path' => config('npanel.acme_sh_path'),
@@ -64,6 +65,7 @@ class SettingsController extends Controller
         $validator = Validator::make($request->all(), [
             'base_path' => 'nullable|string',
             'default_php_version' => 'nullable|string|in:7.4,8.0,8.1,8.2,8.3',
+            'panel_url' => ['nullable', 'url', 'regex:/^https:\/\/.+/'],
             'acme_sh_path' => 'nullable|string',
             'ssl_provider' => 'nullable|string|in:letsencrypt,manual',
             'ssl_auto_renew' => 'nullable|boolean',
@@ -92,6 +94,7 @@ class SettingsController extends Controller
             $envMappings = [
                 'base_path' => 'NPANEL_BASE_PATH',
                 'default_php_version' => 'NPANEL_DEFAULT_PHP_VERSION',
+                'panel_url' => 'NPANEL_URL',
                 'acme_sh_path' => 'ACME_SH_PATH',
                 'ssl_provider' => 'SSL_PROVIDER',
                 'ssl_auto_renew' => 'SSL_AUTO_RENEW',

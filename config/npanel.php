@@ -47,6 +47,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Panel URL
+    |--------------------------------------------------------------------------
+    |
+    | The HTTPS URL where the panel is accessible. Used for generated links,
+    | email notifications, and as the primary access point.
+    | Example: https://panel.yourdomain.com
+    |
+    */
+    'panel_url' => env('NPANEL_URL', null),
+
+    /*
+    |--------------------------------------------------------------------------
     | SSL/TLS Configuration
     |--------------------------------------------------------------------------
     |
