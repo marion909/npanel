@@ -15,8 +15,8 @@ PASSWORD="$2"
 
 echo "=== Resetting password for $EMAIL ==="
 
-# Generate SHA512-CRYPT hash
-HASH=$(php -r "echo crypt('$PASSWORD', '\\\$6\\\$rounds=5000\\\$' . substr(base64_encode(random_bytes(16)), 0, 16) . '\\\$');")
+# Generate SHA512-CRYPT hash with Dovecot format
+HASH=$(doveadm pw -s SHA512-CRYPT -p "$PASSWORD")
 
 echo "Generated password hash: ${HASH:0:30}..."
 
