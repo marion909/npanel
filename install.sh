@@ -267,8 +267,8 @@ setup_database() {
     echo ""
     
     # Store for later use
-    export NPANEL_MYSQL_ROOT_PASSWORD="${MYSQL_ADMIN_PASS}"
     export NPANEL_MYSQL_ROOT_USERNAME="npanel_admin"
+    export NPANEL_MYSQL_ROOT_PASSWORD="${MYSQL_ADMIN_PASS}"
 }
 
 install_npanel() {
@@ -713,6 +713,12 @@ setup_mail_database() {
     MAIL_DB_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-25)
     MAIL_DB_NAME="npanel_mail"
     MAIL_DB_USER="npanel_mail"
+    
+    # Read MySQL credentials from .env if not set
+    if [ -z "${NPANEL_MYSQL_ROOT_USERNAME}" ] && [ -f "${INSTALL_DIR}/.env" ]; then
+        NPANEL_MYSQL_ROOT_USERNAME=$(grep MYSQL_ROOT_USERNAME "${INSTALL_DIR}/.env" | cut -d '=' -f2)
+        NPANEL_MYSQL_ROOT_PASSWORD=$(grep MYSQL_ROOT_PASSWORD "${INSTALL_DIR}/.env" | cut -d '=' -f2)
+    fi
     
     # Create mail database and user
     print_status "Creating mail database ${MAIL_DB_NAME}..."
