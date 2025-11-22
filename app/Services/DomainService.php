@@ -330,9 +330,18 @@ HTML;
      */
     public function suspendDomain(Domain $domain): void
     {
-        $this->nginxService->disableSite($domain->domain_name);
-        $this->nginxService->reload();
+        // Update domain status
         $domain->update(['status' => 'suspended']);
+        
+        // Generate suspended config for main domain
+        $this->nginxService->generateSuspendedConfig($domain);
+        
+        // Generate suspended configs for all subdomains
+        foreach ($domain->subdomains as $subdomain) {
+            $this->nginxService->generateSuspendedConfigForSubdomain($subdomain);
+        }
+        
+        $this->nginxService->reload();
     }
 
     /**
@@ -340,8 +349,25 @@ HTML;
      */
     public function resumeDomain(Domain $domain): void
     {
-        $this->nginxService->enableSite($domain->domain_name);
-        $this->nginxService->reload();
+        // Update domain status
         $domain->update(['status' => 'active']);
+        
+        // Regenerate normal config for main domain
+        $config = $this->nginxService->generateDomainConfig($domain);
+        $this->nginxService->writeConfig($domain->domain_name, $config);
+        $this->nginxService->enableSite($domain->domain_name);
+        
+        // Regenerate normal configs for all subdomains
+        foreach ($domain->subdomains as $subdomain) {
+            $subdomainFullName = $subdomain->subdomain_name === '@' 
+                ? $domain->domain_name 
+                : $subdomain->subdomain_name . '.' . $domain->domain_name;
+            
+            $config = $this->nginxService->generateSubdomainConfig($subdomain);
+            $this->nginxService->writeConfig($subdomainFullName, $config);
+            $this->nginxService->enableSite($subdomainFullName);
+        }
+        
+        $this->nginxService->reload();
     }
 }

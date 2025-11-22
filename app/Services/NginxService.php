@@ -246,4 +246,119 @@ class NginxService
 
         return true;
     }
+
+    /**
+     * Generate suspended configuration for a domain
+     */
+    public function generateSuspendedConfig(Domain $domain): void
+    {
+        // Ensure suspended page exists in a central location
+        $this->ensureSuspendedPageExists();
+        
+        // Generate suspended Nginx config
+        $config = $this->generateSuspendedNginxConfig($domain->domain_name, $domain->ssl_enabled, $domain->ssl_cert_path, $domain->ssl_key_path);
+        $this->writeConfig($domain->domain_name, $config);
+        $this->enableSite($domain->domain_name);
+    }
+
+    /**
+     * Generate suspended configuration for a subdomain
+     */
+    public function generateSuspendedConfigForSubdomain(Subdomain $subdomain): void
+    {
+        // Ensure suspended page exists in a central location
+        $this->ensureSuspendedPageExists();
+        
+        $parentDomain = $subdomain->parentDomain;
+        
+        // Determine full subdomain name
+        $subdomainFullName = $subdomain->subdomain_name === '@' 
+            ? $parentDomain->domain_name 
+            : $subdomain->subdomain_name . '.' . $parentDomain->domain_name;
+        
+        // Determine SSL settings (use subdomain's cert if available, otherwise parent's)
+        $sslEnabled = $subdomain->ssl_enabled;
+        $sslCertPath = $subdomain->ssl_cert_path ?? $parentDomain->ssl_cert_path ?? '';
+        $sslKeyPath = $subdomain->ssl_key_path ?? $parentDomain->ssl_key_path ?? '';
+        
+        // Generate suspended Nginx config
+        $config = $this->generateSuspendedNginxConfig($subdomainFullName, $sslEnabled, $sslCertPath, $sslKeyPath);
+        $this->writeConfig($subdomainFullName, $config);
+        $this->enableSite($subdomainFullName);
+    }
+
+    /**
+     * Ensure the suspended page HTML exists in /var/www/html
+     */
+    protected function ensureSuspendedPageExists(): void
+    {
+        $suspendedPagePath = '/var/www/html/suspended.html';
+        
+        if (!File::exists($suspendedPagePath)) {
+            $suspendedHtml = View::make('templates/nginx/suspended')->render();
+            
+            // Write to temp file first
+            $tempPath = sys_get_temp_dir() . '/suspended.html';
+            File::put($tempPath, $suspendedHtml);
+            
+            // Move with sudo
+            $escapedTemp = escapeshellarg($tempPath);
+            $escapedTarget = escapeshellarg($suspendedPagePath);
+            exec("sudo mv {$escapedTemp} {$escapedTarget}");
+            exec("sudo chmod 644 {$escapedTarget}");
+        }
+    }
+
+    /**
+     * Generate suspended Nginx configuration content
+     */
+    protected function generateSuspendedNginxConfig(string $domainName, bool $sslEnabled, ?string $sslCertPath, ?string $sslKeyPath): string
+    {
+        $config = "# Suspended configuration for {$domainName}\n\n";
+        
+        // HTTP configuration - redirect to HTTPS if SSL enabled
+        $config .= "server {\n";
+        $config .= "    listen 80;\n";
+        $config .= "    listen [::]:80;\n";
+        $config .= "    server_name {$domainName};\n\n";
+        
+        if ($sslEnabled && $sslCertPath && $sslKeyPath) {
+            $config .= "    return 301 https://\$server_name\$request_uri;\n";
+        } else {
+            $config .= "    root /var/www/html;\n";
+            $config .= "    location / {\n";
+            $config .= "        return 503;\n";
+            $config .= "    }\n";
+            $config .= "    error_page 503 /suspended.html;\n";
+            $config .= "    location = /suspended.html {\n";
+            $config .= "        internal;\n";
+            $config .= "    }\n";
+        }
+        
+        $config .= "}\n\n";
+        
+        // HTTPS configuration if SSL enabled
+        if ($sslEnabled && $sslCertPath && $sslKeyPath) {
+            $config .= "server {\n";
+            $config .= "    listen 443 ssl http2;\n";
+            $config .= "    listen [::]:443 ssl http2;\n";
+            $config .= "    server_name {$domainName};\n\n";
+            $config .= "    ssl_certificate {$sslCertPath};\n";
+            $config .= "    ssl_certificate_key {$sslKeyPath};\n";
+            $config .= "    ssl_protocols TLSv1.2 TLSv1.3;\n";
+            $config .= "    ssl_ciphers HIGH:!aNULL:!MD5;\n\n";
+            $config .= "    root /var/www/html;\n";
+            $config .= "    location / {\n";
+            $config .= "        return 503;\n";
+            $config .= "    }\n";
+            $config .= "    error_page 503 /suspended.html;\n";
+            $config .= "    location = /suspended.html {\n";
+            $config .= "        internal;\n";
+            $config .= "    }\n";
+            $config .= "}\n";
+        }
+        
+        return $config;
+    }
 }
+
