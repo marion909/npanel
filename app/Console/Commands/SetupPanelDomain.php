@@ -402,7 +402,7 @@ NGINX;
     }
 
     /**
-     * Update .env file with panel URL
+     * Update .env file with panel URL and related settings
      */
     protected function updateEnvFile(string $domain): bool
     {
@@ -417,18 +417,72 @@ NGINX;
 
         $envContent = File::get($envPath);
         $panelUrl = "https://{$domain}";
+        
+        // Extract base domain for session (e.g., "npanel.at" from "webadmin.npanel.at")
+        $baseDomain = implode('.', array_slice(explode('.', $domain), -2));
 
-        // Check if NPANEL_URL exists
+        // Update or add NPANEL_URL
         if (preg_match('/^NPANEL_URL=/m', $envContent)) {
-            // Update existing
             $envContent = preg_replace(
                 '/^NPANEL_URL=.*/m',
                 "NPANEL_URL={$panelUrl}",
                 $envContent
             );
         } else {
-            // Add new
             $envContent .= "\n# Panel Access URL\nNPANEL_URL={$panelUrl}\n";
+        }
+
+        // Update or add APP_URL
+        if (preg_match('/^APP_URL=/m', $envContent)) {
+            $envContent = preg_replace(
+                '/^APP_URL=.*/m',
+                "APP_URL={$panelUrl}",
+                $envContent
+            );
+        } else {
+            $envContent .= "APP_URL={$panelUrl}\n";
+        }
+
+        // Update or add SESSION_DOMAIN (set to base domain with leading dot for all subdomains)
+        $sessionDomain = ".{$baseDomain}";
+        if (preg_match('/^SESSION_DOMAIN=/m', $envContent)) {
+            $envContent = preg_replace(
+                '/^SESSION_DOMAIN=.*/m',
+                "SESSION_DOMAIN={$sessionDomain}",
+                $envContent
+            );
+        } else {
+            $envContent .= "SESSION_DOMAIN={$sessionDomain}\n";
+        }
+
+        // Update or add SANCTUM_STATEFUL_DOMAINS
+        // Include the specific domain, base domain, and common localhost entries
+        $sanctumDomains = "{$domain},{$baseDomain},localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1";
+        if (preg_match('/^SANCTUM_STATEFUL_DOMAINS=/m', $envContent)) {
+            // Get existing domains and merge
+            preg_match('/^SANCTUM_STATEFUL_DOMAINS=(.*)$/m', $envContent, $matches);
+            $existingDomains = isset($matches[1]) ? $matches[1] : '';
+            
+            // Parse existing domains
+            $domainsArray = array_filter(explode(',', $existingDomains));
+            
+            // Add new domains if not already present
+            $newDomains = [$domain, $baseDomain];
+            foreach ($newDomains as $newDomain) {
+                if (!in_array($newDomain, $domainsArray)) {
+                    $domainsArray[] = $newDomain;
+                }
+            }
+            
+            $sanctumDomains = implode(',', $domainsArray);
+            
+            $envContent = preg_replace(
+                '/^SANCTUM_STATEFUL_DOMAINS=.*/m',
+                "SANCTUM_STATEFUL_DOMAINS={$sanctumDomains}",
+                $envContent
+            );
+        } else {
+            $envContent .= "SANCTUM_STATEFUL_DOMAINS={$sanctumDomains}\n";
         }
 
         File::put($envPath, $envContent);
@@ -436,7 +490,13 @@ NGINX;
         // Clear config cache
         Artisan::call('config:clear');
 
-        $this->info("✓ Panel URL configured: {$panelUrl}");
+        $this->newLine();
+        $this->info("✓ Environment configuration updated:");
+        $this->info("  - APP_URL: {$panelUrl}");
+        $this->info("  - NPANEL_URL: {$panelUrl}");
+        $this->info("  - SESSION_DOMAIN: {$sessionDomain}");
+        $this->info("  - SANCTUM_STATEFUL_DOMAINS: {$sanctumDomains}");
+        
         return true;
     }
 }
