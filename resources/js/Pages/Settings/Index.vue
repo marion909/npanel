@@ -134,30 +134,6 @@
                             <p class="mt-1 text-sm text-gray-500">Path for Nginx virtual host configuration files (read-only)</p>
                         </div>
 
-                        <!-- Panel URL -->
-                        <div>
-                            <label for="panel_url" class="block text-sm font-medium text-gray-700">
-                                <span class="flex items-center">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
-                                    </svg>
-                                    Panel URL (HTTPS)
-                                </span>
-                            </label>
-                            <input
-                                type="url"
-                                id="panel_url"
-                                v-model="systemForm.panel_url"
-                                placeholder="https://panel.yourdomain.com"
-                                pattern="https://.*"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            />
-                            <p class="mt-1 text-sm text-gray-500">
-                                Die HTTPS-URL, unter der dieses Panel erreichbar ist. Wird für generierte Links und Email-Benachrichtigungen verwendet.
-                                <span class="text-amber-600 font-medium">Nur HTTPS erlaubt!</span>
-                            </p>
-                        </div>
-
                         <!-- Roundcube URL -->
                         <div>
                             <label for="roundcube_url" class="block text-sm font-medium text-gray-700">
@@ -494,7 +470,6 @@ const systemForm = ref({
     base_path: props.settings.base_path,
     default_php_version: props.settings.default_php_version,
     nginx_sites_available: props.settings.nginx_sites_available,
-    panel_url: props.settings.panel_url,
     roundcube_url: props.settings.roundcube_url,
 });
 
