@@ -201,6 +201,26 @@ install_acme_sh() {
     print_success "acme.sh installed"
 }
 
+install_wpcli() {
+    print_status "Installing WP-CLI for WordPress management..."
+    
+    # Download WP-CLI
+    curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+    
+    # Make it executable
+    chmod +x wp-cli.phar
+    
+    # Move to system path
+    mv wp-cli.phar /usr/local/bin/wp
+    
+    # Verify installation
+    if wp --info &> /dev/null; then
+        print_success "WP-CLI installed successfully"
+    else
+        print_warning "WP-CLI installation may have issues, but continuing..."
+    fi
+}
+
 setup_database() {
     print_status "Setting up database..."
     
@@ -1087,6 +1107,7 @@ main() {
     install_composer
     install_nodejs
     install_acme_sh
+    install_wpcli
     setup_database
     install_npanel
     configure_sudo_permissions

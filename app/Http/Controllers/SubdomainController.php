@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\InstallWordPressJob;
 use App\Models\Domain;
 use App\Models\Subdomain;
 use App\Services\SubdomainService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class SubdomainController extends Controller
@@ -23,6 +25,7 @@ class SubdomainController extends Controller
             'subdomain_name' => 'required|string|max:63|regex:/^[a-z0-9-]+$/',
             'php_version' => 'nullable|string|in:7.4,8.0,8.1,8.2,8.3',
             'document_root' => 'nullable|string',
+            'install_wordpress' => 'nullable|boolean',
         ]);
 
         try {
@@ -36,6 +39,21 @@ class SubdomainController extends Controller
             }
 
             $subdomain = $this->subdomainService->createSubdomain($domain, $validated);
+
+            // Install WordPress if requested
+            if (!empty($validated['install_wordpress'])) {
+                Log::info('WordPress installation requested', [
+                    'subdomain_id' => $subdomain->id,
+                ]);
+
+                // Dispatch WordPress installation job
+                InstallWordPressJob::dispatch($subdomain);
+
+                return back()->with([
+                    'success' => "Subdomain '{$subdomain->subdomain_name}' created. WordPress is being installed in the background. Check back in a few moments.",
+                    'subdomain_id' => $subdomain->id,
+                ]);
+            }
 
             Log::info('Subdomain created successfully', [
                 'domain_id' => $domain->id,
@@ -113,5 +131,26 @@ class SubdomainController extends Controller
 
             return back()->with('error', 'Failed to delete subdomain: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Get WordPress credentials for a subdomain
+     */
+    public function wordpressCredentials(Domain $domain, Subdomain $subdomain)
+    {
+        $cacheKey = 'wordpress_credentials_' . $subdomain->id;
+        $credentials = Cache::get($cacheKey);
+
+        if (!$credentials) {
+            return response()->json([
+                'success' => false,
+                'message' => 'WordPress credentials not found or expired.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'credentials' => $credentials,
+        ]);
     }
 }

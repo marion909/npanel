@@ -1071,6 +1071,32 @@ rollback_instructions() {
     echo ""
 }
 
+check_wpcli() {
+    print_status "Checking WP-CLI installation..."
+    
+    if ! command -v wp &> /dev/null; then
+        print_warning "WP-CLI not found. Installing for WordPress One-Click installation support..."
+        
+        # Download WP-CLI
+        curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+        
+        # Make it executable
+        chmod +x wp-cli.phar
+        
+        # Move to system path
+        mv wp-cli.phar /usr/local/bin/wp
+        
+        # Verify installation
+        if wp --info &> /dev/null; then
+            print_success "WP-CLI installed successfully"
+        else
+            print_warning "WP-CLI installation may have issues. WordPress One-Click installation will use fallback method."
+        fi
+    else
+        print_success "WP-CLI is already installed ($(wp --version | head -n1))"
+    fi
+}
+
 # Main update flow
 main() {
     echo ""
@@ -1108,6 +1134,7 @@ main() {
        build_assets && \
        run_migrations && \
        check_env_variables && \
+       check_wpcli && \
        clear_caches && \
        optimize_laravel && \
        update_permissions && \

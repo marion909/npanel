@@ -232,6 +232,18 @@
                                     <option value="8.3">PHP 8.3</option>
                                 </select>
                             </div>
+                            <div class="border-t pt-4">
+                                <label class="flex items-center">
+                                    <input type="checkbox" v-model="newSubdomain.install_wordpress" 
+                                           class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                    <span class="ml-2 text-sm">
+                                        <span class="font-medium text-gray-700">🚀 WordPress One-Click Installation</span>
+                                        <span class="block text-xs text-gray-500 mt-1">
+                                            Installiert automatisch WordPress mit Datenbank und zeigt Zugangsdaten an
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                     <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
@@ -318,6 +330,139 @@
                 </div>
             </div>
         </div>
+
+        <!-- WordPress Credentials Modal -->
+        <div v-if="showWordPressCredentials" class="fixed z-10 inset-0 overflow-y-auto">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showWordPressCredentials = false"></div>
+                <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div class="sm:flex sm:items-start">
+                            <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                                <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                            </div>
+                            <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left flex-1">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                                    🚀 WordPress erfolgreich installiert!
+                                </h3>
+                                <div class="mt-4 space-y-4">
+                                    <!-- Site URLs -->
+                                    <div class="bg-blue-50 p-4 rounded-lg">
+                                        <h4 class="font-semibold text-blue-900 mb-2">Website URLs</h4>
+                                        <div class="space-y-2">
+                                            <div>
+                                                <label class="text-sm text-blue-700">Website:</label>
+                                                <a :href="wordPressCredentials.site_url" target="_blank" class="block text-blue-600 hover:underline font-mono text-sm">
+                                                    {{ wordPressCredentials.site_url }}
+                                                </a>
+                                            </div>
+                                            <div>
+                                                <label class="text-sm text-blue-700">Admin Panel:</label>
+                                                <a :href="wordPressCredentials.admin_url" target="_blank" class="block text-blue-600 hover:underline font-mono text-sm">
+                                                    {{ wordPressCredentials.admin_url }}
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- WordPress Admin Credentials -->
+                                    <div class="bg-purple-50 p-4 rounded-lg">
+                                        <h4 class="font-semibold text-purple-900 mb-2">WordPress Admin Zugang</h4>
+                                        <div class="space-y-2">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex-1">
+                                                    <label class="text-sm text-purple-700">Benutzername:</label>
+                                                    <p class="font-mono text-sm">{{ wordPressCredentials.admin_user }}</p>
+                                                </div>
+                                                <button @click="copyToClipboard(wordPressCredentials.admin_user)" 
+                                                        class="ml-2 px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700">
+                                                    Kopieren
+                                                </button>
+                                            </div>
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex-1">
+                                                    <label class="text-sm text-purple-700">Passwort:</label>
+                                                    <p class="font-mono text-sm break-all">{{ wordPressCredentials.admin_password }}</p>
+                                                </div>
+                                                <button @click="copyToClipboard(wordPressCredentials.admin_password)" 
+                                                        class="ml-2 px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700">
+                                                    Kopieren
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Database Credentials -->
+                                    <div class="bg-green-50 p-4 rounded-lg">
+                                        <h4 class="font-semibold text-green-900 mb-2">Datenbank Zugangsdaten</h4>
+                                        <div class="space-y-2">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex-1">
+                                                    <label class="text-sm text-green-700">Datenbankname:</label>
+                                                    <p class="font-mono text-sm">{{ wordPressCredentials.db_name }}</p>
+                                                </div>
+                                                <button @click="copyToClipboard(wordPressCredentials.db_name)" 
+                                                        class="ml-2 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+                                                    Kopieren
+                                                </button>
+                                            </div>
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex-1">
+                                                    <label class="text-sm text-green-700">Benutzer:</label>
+                                                    <p class="font-mono text-sm">{{ wordPressCredentials.db_user }}</p>
+                                                </div>
+                                                <button @click="copyToClipboard(wordPressCredentials.db_user)" 
+                                                        class="ml-2 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+                                                    Kopieren
+                                                </button>
+                                            </div>
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex-1">
+                                                    <label class="text-sm text-green-700">Passwort:</label>
+                                                    <p class="font-mono text-sm break-all">{{ wordPressCredentials.db_password }}</p>
+                                                </div>
+                                                <button @click="copyToClipboard(wordPressCredentials.db_password)" 
+                                                        class="ml-2 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+                                                    Kopieren
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Warning -->
+                                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                                        <div class="flex">
+                                            <div class="flex-shrink-0">
+                                                <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                                </svg>
+                                            </div>
+                                            <div class="ml-3">
+                                                <p class="text-sm text-yellow-700">
+                                                    <strong>Wichtig:</strong> Speichern Sie diese Zugangsdaten sicher! Sie werden aus Sicherheitsgründen nur einmal angezeigt.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button @click="copyAllCredentials"
+                                class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                            📋 Alle kopieren
+                        </button>
+                        <button @click="showWordPressCredentials = false" type="button"
+                                class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Schließen
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </AppLayout>
 </template>
 
@@ -332,6 +477,9 @@ const props = defineProps({
 
 const showAddSubdomainModal = ref(false);
 const showEditSubdomainModal = ref(false);
+const showWordPressCredentials = ref(false);
+const wordPressCredentials = ref(null);
+const wordPressPollingInterval = ref(null);
 const documentRootType = ref('subdomain');
 const subfolderName = ref('');
 const editDocumentRootType = ref('custom');
@@ -340,6 +488,7 @@ const newSubdomain = ref({
     subdomain_name: '',
     php_version: props.domain.php_version || '8.3',
     document_root: '',
+    install_wordpress: false,
 });
 const editingSubdomain = ref(null);
 
@@ -475,6 +624,9 @@ onUnmounted(() => {
     if (sslPollingInterval) {
         clearInterval(sslPollingInterval);
     }
+    if (wordPressPollingInterval.value) {
+        clearInterval(wordPressPollingInterval.value);
+    }
 });
 
 const addSubdomain = () => {
@@ -485,21 +637,110 @@ const addSubdomain = () => {
         newSubdomain.value.document_root = `${props.domain.document_root}/${subfolderName.value}`;
     }
     
+    const shouldInstallWordPress = newSubdomain.value.install_wordpress;
+    
     router.post(`/domains/${props.domain.id}/subdomains`, newSubdomain.value, {
-        onSuccess: () => {
+        onSuccess: (page) => {
             showAddSubdomainModal.value = false;
             documentRootType.value = 'subdomain';
             subfolderName.value = '';
+            
+            // Start polling for WordPress credentials if installation was requested
+            if (shouldInstallWordPress && page.props.flash?.subdomain_id) {
+                startWordPressPolling(page.props.flash.subdomain_id);
+            }
+            
             newSubdomain.value = {
                 subdomain_name: '',
                 php_version: props.domain.php_version || '8.3',
                 document_root: '',
+                install_wordpress: false,
             };
         },
         onError: (errors) => {
             alert('Failed to create subdomain: ' + Object.values(errors).join(', '));
         }
     });
+};
+
+// Poll for WordPress installation credentials
+const startWordPressPolling = (subdomainId) => {
+    let pollCount = 0;
+    const maxPolls = 36; // 3 minutes (36 * 5 seconds)
+    
+    wordPressPollingInterval.value = setInterval(() => {
+        pollCount++;
+        
+        // Fetch WordPress credentials
+        fetch(`/domains/${props.domain.id}/subdomains/${subdomainId}/wordpress-credentials`)
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                }
+                throw new Error('Not ready yet');
+            })
+            .then(data => {
+                // Credentials are ready
+                wordPressCredentials.value = data;
+                showWordPressCredentials.value = true;
+                
+                // Stop polling
+                clearInterval(wordPressPollingInterval.value);
+                wordPressPollingInterval.value = null;
+            })
+            .catch(() => {
+                // Not ready yet, continue polling
+                if (pollCount >= maxPolls) {
+                    // Timeout reached
+                    clearInterval(wordPressPollingInterval.value);
+                    wordPressPollingInterval.value = null;
+                    alert('WordPress installation is taking longer than expected. Please check back in a few minutes.');
+                }
+            });
+    }, 5000);
+};
+
+// Copy to clipboard function
+const copyToClipboard = async (text) => {
+    try {
+        await navigator.clipboard.writeText(text);
+        // Simple visual feedback
+        alert('In Zwischenablage kopiert!');
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        alert('Kopieren fehlgeschlagen. Bitte manuell kopieren.');
+    }
+};
+
+// Copy all credentials at once
+const copyAllCredentials = async () => {
+    if (!wordPressCredentials.value) return;
+    
+    const text = `
+=== WordPress Installation Zugangsdaten ===
+
+Website URL: ${wordPressCredentials.value.site_url}
+Admin Panel: ${wordPressCredentials.value.admin_url}
+
+WordPress Admin:
+  Benutzername: ${wordPressCredentials.value.admin_user}
+  Passwort: ${wordPressCredentials.value.admin_password}
+
+Datenbank:
+  Name: ${wordPressCredentials.value.db_name}
+  Benutzer: ${wordPressCredentials.value.db_user}
+  Passwort: ${wordPressCredentials.value.db_password}
+
+==========================================
+`.trim();
+    
+    try {
+        await navigator.clipboard.writeText(text);
+        alert('Alle Zugangsdaten in Zwischenablage kopiert!');
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        alert('Kopieren fehlgeschlagen.');
+    }
 };
 
 const editSubdomain = (subdomain) => {
