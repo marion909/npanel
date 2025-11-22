@@ -65,4 +65,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/mail/domains/{domain}/dns', [App\Http\Controllers\MailController::class, 'dnsRecords'])->name('mail.dns');
     Route::get('/mail/settings', [App\Http\Controllers\MailController::class, 'settings'])->name('mail.settings');
     Route::post('/mail/settings', [App\Http\Controllers\MailController::class, 'updateSettings'])->name('mail.settings.update');
+    
+    // Settings
+    Route::get('/settings', [App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
+    Route::post('/settings', [App\Http\Controllers\SettingsController::class, 'update'])->name('settings.update');
+    Route::post('/settings/profile', [App\Http\Controllers\SettingsController::class, 'updateProfile'])->name('settings.profile');
 });
