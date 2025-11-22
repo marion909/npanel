@@ -747,7 +747,34 @@ NGINX_EOF
     # Generate random DES key
     local RANDOM_KEY=$(openssl rand -base64 24)
     
-    cat > "$ROUNDCUBE_PATH/config/config.inc.php" <<'PHP_EOF'
+    # Get Roundcube database credentials
+    local DB_USER="roundcube"
+    local DB_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-25)
+    local DB_NAME="roundcube"
+    
+    # Create Roundcube database if not exists
+    print_status "Setting up Roundcube database..."
+    if grep -q "MYSQL_ROOT_PASSWORD" "${INSTALL_DIR}/.env"; then
+        MYSQL_ROOT_USER=$(grep "MYSQL_ROOT_USERNAME" "${INSTALL_DIR}/.env" | cut -d '=' -f2)
+        MYSQL_ROOT_PASS=$(grep "MYSQL_ROOT_PASSWORD" "${INSTALL_DIR}/.env" | cut -d '=' -f2)
+        MYSQL_CMD="mysql -u ${MYSQL_ROOT_USER} -p${MYSQL_ROOT_PASS}"
+    else
+        MYSQL_CMD="mysql"
+    fi
+    
+    $MYSQL_CMD <<EOF
+CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';
+GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+    
+    # Import Roundcube database schema if needed
+    if [ -f "$ROUNDCUBE_PATH/SQL/mysql.initial.sql" ]; then
+        mysql -u "${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" < "$ROUNDCUBE_PATH/SQL/mysql.initial.sql" 2>/dev/null || true
+    fi
+    
+    cat > "$ROUNDCUBE_PATH/config/config.inc.php" <<EOF
 <?php
 \$config = [];
 
@@ -799,7 +826,7 @@ NGINX_EOF
 
 // Plugins
 \$config['plugins'] = [];
-PHP_EOF
+EOF
     
     chown www-data:www-data "$ROUNDCUBE_PATH/config/config.inc.php"
     chmod 640 "$ROUNDCUBE_PATH/config/config.inc.php"
