@@ -819,6 +819,11 @@ install_mail_server() {
     postconf -e "myhostname=$(hostname -f)"
     postconf -e "mydestination=localhost"
     
+    # Enable submission port (587) for authenticated SMTP
+    print_status "Enabling submission port (587) for SMTP authentication..."
+    sed -i 's/^#submission inet/submission inet/' /etc/postfix/master.cf
+    sed -i '/^submission inet/,/^#.*/ { /^#  -o smtpd_tls_security_level=/s/^#//; /^#  -o smtpd_sasl_auth_enable=/s/^#//; /^#  -o smtpd_tls_auth_only=/s/^#//; /^#  -o smtpd_client_restrictions=/s/^#//; /^#  -o smtpd_sender_login_maps=/s/^#//; /^#  -o smtpd_sender_restrictions=/s/^#//; /^#  -o smtpd_recipient_restrictions=/s/^#//; }' /etc/postfix/master.cf
+    
     # Configure OpenDKIM
     print_status "Configuring OpenDKIM..."
     mkdir -p /etc/opendkim/keys
