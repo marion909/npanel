@@ -467,6 +467,7 @@ SUBMISSION_EOF
         postconf -e "smtpd_sasl_type=dovecot"
         postconf -e "smtpd_sasl_path=private/auth"
         postconf -e "smtpd_sasl_auth_enable=yes"
+        postconf -e "inet_protocols=ipv4"
         
         # Update submission port TLS settings if needed
         if grep -q "smtpd_tls_security_level=encrypt" /etc/postfix/master.cf; then

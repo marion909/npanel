@@ -818,6 +818,7 @@ install_mail_server() {
     print_status "Configuring Postfix..."
     postconf -e "myhostname=$(hostname -f)"
     postconf -e "mydestination=localhost"
+    postconf -e "inet_protocols=ipv4"
     
     # Enable SASL authentication via Dovecot
     postconf -e "smtpd_sasl_type=dovecot"
