@@ -227,7 +227,7 @@ class WordPressService
             $wpCliPath = trim($output[0]);
             
             $command = sprintf(
-                'cd %s && %s core install --url="%s" --title="WordPress Site" --admin_user="%s" --admin_password="%s" --admin_email="%s" --skip-email 2>&1',
+                'cd %s && sudo -u www-data %s core install --url="%s" --title="WordPress Site" --admin_user="%s" --admin_password="%s" --admin_email="%s" --skip-email --allow-root 2>&1',
                 escapeshellarg($wpPath),
                 escapeshellarg($wpCliPath),
                 escapeshellarg($siteUrl),
