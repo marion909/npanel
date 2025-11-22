@@ -694,19 +694,31 @@ EOF
     # Reload services with new configs
     systemctl reload postfix dovecot opendkim
     
-    # Install Roundcube webmail
-    print_status "Installing Roundcube webmail..."
-    install_roundcube
+    # Ask if user wants to install Roundcube
+    read -p "Do you want to install Roundcube webmail? (y/n): " -n 1 -r
+    echo ""
+    
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        read -p "Enter domain for webmail (e.g., webmail.yourdomain.com): " WEBMAIL_DOMAIN
+        
+        if [ -n "$WEBMAIL_DOMAIN" ]; then
+            install_roundcube "$WEBMAIL_DOMAIN"
+            print_status "Webmail will be available at: https://$WEBMAIL_DOMAIN"
+        else
+            print_warning "No domain provided, skipping Roundcube installation"
+        fi
+    fi
     
     print_success "Mail server installation completed!"
     print_status "You can now create mailboxes via the web interface"
-    print_status "Webmail will be available at: https://webmail.$(hostname -f)"
 }
 
 install_roundcube() {
+    local WEBMAIL_DOMAIN=$1
     local ROUNDCUBE_VERSION="1.6.5"
     local ROUNDCUBE_PATH="/var/www/roundcube"
-    local WEBMAIL_DOMAIN="webmail.$(hostname -f)"
+    
+    print_status "Installing Roundcube webmail for $WEBMAIL_DOMAIN..."
     
     # Check if already installed
     if [ -d "$ROUNDCUBE_PATH" ]; then
