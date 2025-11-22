@@ -23,9 +23,9 @@ cat >> /etc/postfix/master.cf << 'EOF'
 # Submission port for authenticated SMTP (port 587)
 submission inet n       -       y       -       -       smtpd
   -o syslog_name=postfix/submission
-  -o smtpd_tls_security_level=encrypt
+  -o smtpd_tls_security_level=may
   -o smtpd_sasl_auth_enable=yes
-  -o smtpd_tls_auth_only=yes
+  -o smtpd_tls_auth_only=no
   -o smtpd_client_restrictions=permit_sasl_authenticated,reject
   -o smtpd_sender_login_maps=mysql:/etc/postfix/mysql/virtual-sender-login-maps.cf
   -o smtpd_sender_restrictions=reject_sender_login_mismatch
