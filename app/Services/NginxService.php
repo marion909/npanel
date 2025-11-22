@@ -49,9 +49,20 @@ class NginxService
             ? ($parentDomain->ssl_key_path ?? '')
             : '';
 
-        $phpFpmSocket = config('npanel.php_fpm_socket_dir') . '/php' 
-            . ($subdomain->php_version ?? $parentDomain->php_version) 
-            . '-fpm-' . Str::slug($subdomain->full_domain) . '.sock';
+        // Determine PHP-FPM socket
+        // If subdomain uses same PHP version as parent, use parent's pool
+        // Otherwise, subdomain should have its own pool
+        if ($subdomain->php_version === $parentDomain->php_version) {
+            // Use parent domain's pool
+            $phpFpmSocket = config('npanel.php_fpm_socket_dir') . '/php' 
+                . $parentDomain->php_version 
+                . '-fpm-' . Str::slug($parentDomain->domain_name) . '.sock';
+        } else {
+            // Use subdomain's own pool
+            $phpFpmSocket = config('npanel.php_fpm_socket_dir') . '/php' 
+                . $subdomain->php_version 
+                . '-fpm-' . Str::slug($subdomain->full_domain) . '.sock';
+        }
 
         return View::make('templates/nginx/subdomain', [
             'subdomain' => $subdomain,
