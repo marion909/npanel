@@ -70,4 +70,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/settings', [App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');
     Route::post('/settings', [App\Http\Controllers\SettingsController::class, 'update'])->name('settings.update');
     Route::post('/settings/profile', [App\Http\Controllers\SettingsController::class, 'updateProfile'])->name('settings.profile');
+    
+    // Monitoring
+    Route::get('/monitoring', [App\Http\Controllers\MonitoringController::class, 'index'])->name('monitoring.index');
+    Route::get('/monitoring/stats', [App\Http\Controllers\MonitoringController::class, 'stats'])->name('monitoring.stats');
+    Route::get('/monitoring/history', [App\Http\Controllers\MonitoringController::class, 'history'])->name('monitoring.history');
 });

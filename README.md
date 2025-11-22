@@ -61,6 +61,14 @@ A modern, powerful web hosting control panel similar to aaPanel/cPanel, built wi
 - **SSL Issuance** - Background certificate generation and installation
 - **Scheduled Jobs** - Automated SSL renewal, cleanup, and maintenance
 
+### 📈 System Monitoring
+- **Real-Time Metrics** - Live CPU, memory, disk, and network statistics
+- **PHP-FPM Pool Status** - Monitor active/idle processes per pool
+- **Nginx Statistics** - Track connections, requests, and performance
+- **Alert System** - Automatic warnings when thresholds are exceeded
+- **Historical Data** - Track trends with 5-minute interval data collection
+- **Auto-Refresh Dashboard** - Updates every 5 seconds for real-time insights
+
 ### 🛡️ Security
 - **Sanctum Authentication** - Token-based API security
 - **Policy-Based Authorization** - Users can only access their own resources

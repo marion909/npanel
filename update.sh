@@ -429,10 +429,20 @@ print_update_info() {
     echo "- Environment: .env_${TIMESTAMP}"
     echo "- Storage: storage_${TIMESTAMP}.tar.gz"
     echo ""
+    echo "New Features in This Update:"
+    echo "- 📈 System Monitoring Dashboard (/monitoring)"
+    echo "  * Real-time CPU, Memory, Disk metrics"
+    echo "  * PHP-FPM pool monitoring"
+    echo "  * Nginx statistics"
+    echo "  * Alert system for threshold violations"
+    echo ""
     echo "Useful Commands:"
     echo "- View logs: tail -f ${INSTALL_DIR}/storage/logs/laravel.log"
     echo "- Check queue workers: sudo supervisorctl status"
     echo "- Restart queue: sudo supervisorctl restart npanel-worker:*"
+    echo "- Test monitoring endpoints:"
+    echo "    curl http://127.0.0.1/nginx-status"
+    echo "    curl http://127.0.0.1/php-fpm-status-{pool-name}?json"
     echo ""
 }
 
@@ -962,6 +972,90 @@ check_roundcube_update() {
     fi
 }
 
+check_monitoring_setup() {
+    print_status "Checking monitoring configuration..."
+    
+    # Check if monitoring Nginx config exists
+    if [ ! -f "/etc/nginx/sites-available/npanel-monitoring.conf" ]; then
+        print_status "Setting up system monitoring..."
+        
+        # Copy monitoring config
+        if [ -f "${INSTALL_DIR}/config/nginx/monitoring.conf" ]; then
+            cp "${INSTALL_DIR}/config/nginx/monitoring.conf" "/etc/nginx/sites-available/npanel-monitoring.conf"
+            
+            # Enable the config
+            if [ ! -L "/etc/nginx/sites-enabled/npanel-monitoring.conf" ]; then
+                ln -s "/etc/nginx/sites-available/npanel-monitoring.conf" "/etc/nginx/sites-enabled/npanel-monitoring.conf"
+            fi
+            
+            # Test Nginx config
+            if nginx -t 2>/dev/null; then
+                print_success "Monitoring Nginx configuration installed"
+            else
+                print_warning "Nginx configuration test failed for monitoring config"
+                rm -f "/etc/nginx/sites-enabled/npanel-monitoring.conf"
+            fi
+        fi
+    else
+        print_status "Monitoring Nginx configuration already exists"
+    fi
+    
+    # Update PHP-FPM pool configurations to include status endpoints
+    print_status "Checking PHP-FPM pool configurations for monitoring..."
+    
+    cd "${INSTALL_DIR}"
+    
+    # Check if any pools need updating
+    local POOLS_UPDATED=0
+    for pool_conf in /etc/php/*/fpm/pool.d/*.conf; do
+        if [ -f "$pool_conf" ] && ! grep -q "pm.status_path" "$pool_conf"; then
+            POOLS_UPDATED=1
+            break
+        fi
+    done
+    
+    if [ $POOLS_UPDATED -eq 1 ]; then
+        print_status "Regenerating PHP-FPM pool configurations with monitoring support..."
+        
+        # Use Laravel tinker to update pools
+        php artisan tinker --execute="
+            \$domains = App\Models\Domain::all();
+            foreach (\$domains as \$domain) {
+                \$pool = \$domain->phpFpmPool;
+                if (\$pool) {
+                    try {
+                        app('App\Services\PhpFpmService')->updatePool(\$pool, \$domain);
+                        echo \"Updated pool: {\$pool->pool_name}\n\";
+                    } catch (Exception \$e) {
+                        echo \"Failed to update pool {\$pool->pool_name}: {\$e->getMessage()}\n\";
+                    }
+                }
+            }
+        " 2>/dev/null || print_warning "Could not update PHP-FPM pools automatically"
+        
+        # Reload PHP-FPM services
+        for version in 7.4 8.0 8.1 8.2 8.3; do
+            if systemctl is-active --quiet php${version}-fpm; then
+                systemctl reload php${version}-fpm 2>/dev/null && \
+                    print_success "PHP ${version}-FPM reloaded with monitoring support"
+            fi
+        done
+    else
+        print_status "PHP-FPM pools already configured for monitoring"
+    fi
+    
+    # Ensure scheduler is set up in crontab
+    if ! crontab -l 2>/dev/null | grep -q "artisan schedule:run"; then
+        print_warning "Laravel Scheduler not found in crontab"
+        print_status "To enable automated metrics collection, add this to crontab:"
+        echo "    * * * * * cd ${INSTALL_DIR} && php artisan schedule:run >> /dev/null 2>&1"
+    else
+        print_success "Laravel Scheduler is configured"
+    fi
+    
+    print_success "Monitoring configuration check completed"
+}
+
 rollback_instructions() {
     echo ""
     echo "=========================================="
@@ -1018,6 +1112,7 @@ main() {
        optimize_laravel && \
        update_permissions && \
        check_mail_server_update && \
+       check_monitoring_setup && \
        restart_services; then
         
         start_queue_workers

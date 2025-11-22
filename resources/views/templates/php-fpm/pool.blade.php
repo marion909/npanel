@@ -18,6 +18,10 @@ pm.min_spare_servers = {{ $pool->pm_min_spare_servers }}
 pm.max_spare_servers = {{ $pool->pm_max_spare_servers }}
 pm.max_requests = 500
 
+; Status page for monitoring
+pm.status_path = /php-fpm-status-{{ $pool->pool_name }}
+ping.path = /php-fpm-ping-{{ $pool->pool_name }}
+
 ; PHP Configuration
 php_admin_value[error_log] = {{ dirname($domain->document_root) }}/logs/php_error.log
 php_admin_flag[log_errors] = on
