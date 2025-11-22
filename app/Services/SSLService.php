@@ -209,7 +209,7 @@ class SSLService
         $domainString = implode(' ', $domainFlags);
 
         return sprintf(
-            '%s --issue %s -w %s --server letsencrypt',
+            '%s --issue %s -w %s --force',
             $this->acmeShPath,
             $domainString,
             $webroot
