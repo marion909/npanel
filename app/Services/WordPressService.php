@@ -47,8 +47,8 @@ class WordPressService
             
             // Use the generated database credentials
             $dbName = $database->database_name;
-            $dbUser = $database->username;
-            $dbPassword = $database->password;
+            $dbUser = $database->mysql_user;
+            $dbPassword = $database->mysql_password;
 
             // 2. Download WordPress
             $wpPath = $subdomain->document_root;
