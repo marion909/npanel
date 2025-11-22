@@ -337,23 +337,57 @@ NGINX;
 
         $config = File::get($configPath);
 
-        // Uncomment HTTPS server block
-        $config = str_replace('# server {', 'server {', $config);
-        $config = str_replace('#     listen 443', '    listen 443', $config);
-        $config = str_replace('#     listen [::]:443', '    listen [::]:443', $config);
-        $config = str_replace('#     server_name', '    server_name', $config);
-        $config = str_replace('#', '', $config); // Remove all # from HTTPS block
-        
-        // Enable HTTPS redirect
-        $config = str_replace(
-            '    # Redirect to HTTPS (will be enabled after SSL cert is issued)
-    # return 301 https://$server_name$request_uri;
+        // Replace the entire HTTP server block with redirect
+        $httpBlock = <<<'NGINX'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name DOMAIN_NAME;
+    
+    # Redirect to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+NGINX;
+        $httpBlock = str_replace('DOMAIN_NAME', $domain, $httpBlock);
 
-    # Temporary: Allow HTTP access for initial setup',
-            '    # Redirect to HTTPS
-    return 301 https://$server_name$request_uri;',
-            $config
+        // Replace HTTP server block
+        $config = preg_replace(
+            '/server\s*\{[^}]*listen\s+80[^}]*\}/s',
+            $httpBlock,
+            $config,
+            1
         );
+
+        // Remove comment markers from HTTPS block
+        $config = preg_replace('/^\s*#\s*server\s*\{/m', 'server {', $config);
+        $config = preg_replace('/^\s*#\s*(listen\s+443)/m', '    $1', $config);
+        $config = preg_replace('/^\s*#\s*(listen\s+\[::\]:443)/m', '    $1', $config);
+        $config = preg_replace('/^\s*#\s*(server_name\s+' . preg_quote($domain, '/') . ')/m', '    $1', $config);
+        $config = preg_replace('/^\s*#\s*(ssl_)/m', '    $1', $config);
+        $config = preg_replace('/^\s*#\s*(root\s+)/m', '    $1', $config);
+        $config = preg_replace('/^\s*#\s*(index\s+)/m', '    $1', $config);
+        $config = preg_replace('/^\s*#\s*(location)/m', '    $1', $config);
+        $config = preg_replace('/^\s*#\s*\}/m', '}', $config);
+        
+        // Fix indentation inside uncommented blocks
+        $lines = explode("\n", $config);
+        $inHttpsBlock = false;
+        $fixedLines = [];
+        
+        foreach ($lines as $line) {
+            if (preg_match('/listen 443/', $line)) {
+                $inHttpsBlock = true;
+            }
+            if ($inHttpsBlock && preg_match('/^#/', $line)) {
+                $line = preg_replace('/^#\s*/', '        ', $line);
+            }
+            if ($inHttpsBlock && preg_match('/^\}/', $line)) {
+                $inHttpsBlock = false;
+            }
+            $fixedLines[] = $line;
+        }
+        
+        $config = implode("\n", $fixedLines);
 
         // Write updated config
         $tempPath = sys_get_temp_dir() . "/{$domain}.conf";
