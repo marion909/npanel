@@ -35,17 +35,26 @@ class SubdomainService
         // Create directory structure
         $this->createDirectoryStructure($subdomain);
 
-        // Generate Nginx configuration
-        $nginxConfig = $this->nginxService->generateSubdomainConfig($subdomain);
+        // Generate Nginx configuration (always regenerate to ensure it exists)
+        $nginxConfig = $this->nginxService->generateSubdomainConfig($subdomain->fresh());
         $configPath = $this->nginxService->writeConfig($subdomain->full_domain, $nginxConfig);
-        $subdomain->update(['nginx_config_path' => $configPath]);
+        
+        // Update nginx_config_path if not set or changed
+        if ($subdomain->nginx_config_path !== $configPath) {
+            $subdomain->update(['nginx_config_path' => $configPath]);
+        }
 
-        // Enable site
+        // Enable site (create symlink)
         $this->nginxService->enableSite($subdomain->full_domain);
 
         // Create PHP-FPM pool if different version than parent
         if ($subdomain->php_version !== $parentDomain->php_version) {
             $this->createPhpFpmPool($subdomain, $parentDomain);
+        }
+
+        // Test Nginx configuration before reloading
+        if (!$this->nginxService->testConfig()) {
+            throw new \Exception('Nginx configuration test failed after creating subdomain');
         }
 
         // Issue SSL certificate if parent has SSL enabled
