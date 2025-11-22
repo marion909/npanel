@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Domain;
+use App\Models\Subdomain;
 use App\Models\SslCertificate;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -19,23 +20,26 @@ class SSLService
     }
 
     /**
-     * Issue SSL certificate for domain using Let's Encrypt
+     * Issue SSL certificate for domain or subdomain using Let's Encrypt
      */
-    public function issueCertificate(Domain $domain): SslCertificate
+    public function issueCertificate(Domain|Subdomain $domainOrSubdomain): SslCertificate
     {
+        $isSubdomain = $domainOrSubdomain instanceof Subdomain;
+        $domainName = $isSubdomain ? $domainOrSubdomain->full_domain : $domainOrSubdomain->domain_name;
+        $webroot = $domainOrSubdomain->document_root;
+
         // Check if certificate already exists and is valid
-        $existingCert = $this->checkExistingCertificate($domain->domain_name);
+        $existingCert = $this->checkExistingCertificate($domainName);
         if ($existingCert) {
-            Log::info("Reusing existing SSL certificate for {$domain->domain_name}");
-            return $this->applyCertificate($domain, $existingCert);
+            Log::info("Reusing existing SSL certificate for {$domainName}");
+            return $this->applyCertificate($domainOrSubdomain, $existingCert);
         }
 
         // Create ACME challenge directory
-        $this->createAcmeChallenge($domain);
+        $this->createAcmeChallenge($domainOrSubdomain);
 
         // Build acme.sh command
-        $domains = $this->getDomainList($domain);
-        $webroot = $domain->document_root;
+        $domains = $isSubdomain ? [$domainName] : $this->getDomainList($domainOrSubdomain);
 
         $command = $this->buildAcmeCommand($domains, $webroot);
 
@@ -46,7 +50,7 @@ class SSLService
 
         if ($returnCode !== 0) {
             $errorMsg = implode("\n", $output);
-            Log::error("SSL certificate issuance failed for {$domain->domain_name}", [
+            Log::error("SSL certificate issuance failed for {$domainName}", [
                 'output' => $errorMsg,
                 'return_code' => $returnCode,
             ]);
@@ -54,24 +58,23 @@ class SSLService
         }
 
         // Install certificate
-        $this->installCertificate($domain);
+        $this->installCertificate($domainOrSubdomain);
 
         // Create or update SSL certificate record
-        $certificate = SslCertificate::updateOrCreate(
-            ['domain_id' => $domain->id],
-            [
-                'certificate_path' => $this->getCertPath($domain->domain_name),
-                'private_key_path' => $this->getKeyPath($domain->domain_name),
-                'chain_path' => $this->getChainPath($domain->domain_name),
-                'provider' => 'letsencrypt',
-                'issue_date' => now(),
-                'expiry_date' => now()->addDays(90),
-                'auto_renew' => true,
-            ]
-        );
+        $domainId = $isSubdomain ? $domainOrSubdomain->parent_domain_id : $domainOrSubdomain->id;
+        $certificate = SslCertificate::create([
+            'domain_id' => $domainId,
+            'certificate_path' => $this->getCertPath($domainName),
+            'private_key_path' => $this->getKeyPath($domainName),
+            'chain_path' => $this->getChainPath($domainName),
+            'provider' => 'letsencrypt',
+            'issue_date' => now(),
+            'expiry_date' => now()->addDays(90),
+            'auto_renew' => true,
+        ]);
 
-        // Update domain with SSL paths
-        $domain->update([
+        // Update with SSL paths
+        $domainOrSubdomain->update([
             'ssl_enabled' => true,
             'ssl_cert_path' => $certificate->certificate_path,
             'ssl_key_path' => $certificate->private_key_path,
@@ -135,24 +138,25 @@ class SSLService
     /**
      * Apply existing certificate to domain
      */
-    protected function applyCertificate(Domain $domain, array $certData): SslCertificate
+    protected function applyCertificate(Domain|Subdomain $domainOrSubdomain, array $certData): SslCertificate
     {
+        $isSubdomain = $domainOrSubdomain instanceof Subdomain;
+        $domainId = $isSubdomain ? $domainOrSubdomain->parent_domain_id : $domainOrSubdomain->id;
+        
         // Create or update SSL certificate record
-        $certificate = SslCertificate::updateOrCreate(
-            ['domain_id' => $domain->id],
-            [
-                'certificate_path' => $certData['certificate_path'],
-                'private_key_path' => $certData['private_key_path'],
-                'chain_path' => $certData['chain_path'],
-                'provider' => 'letsencrypt',
-                'issue_date' => now(),
-                'expiry_date' => $certData['expiry_date'],
-                'auto_renew' => true,
-            ]
-        );
+        $certificate = SslCertificate::create([
+            'domain_id' => $domainId,
+            'certificate_path' => $certData['certificate_path'],
+            'private_key_path' => $certData['private_key_path'],
+            'chain_path' => $certData['chain_path'],
+            'provider' => 'letsencrypt',
+            'issue_date' => now(),
+            'expiry_date' => $certData['expiry_date'],
+            'auto_renew' => true,
+        ]);
 
-        // Update domain with SSL paths
-        $domain->update([
+        // Update with SSL paths
+        $domainOrSubdomain->update([
             'ssl_enabled' => true,
             'ssl_cert_path' => $certificate->certificate_path,
             'ssl_key_path' => $certificate->private_key_path,
@@ -160,10 +164,18 @@ class SSLService
         ]);
 
         // Regenerate Nginx config with SSL
-        app(NginxService::class)->writeConfig(
-            $domain->domain_name,
-            app(NginxService::class)->generateDomainConfig($domain->fresh())
-        );
+        $nginxService = app(NginxService::class);
+        if ($isSubdomain) {
+            $nginxService->writeConfig(
+                $domainOrSubdomain->full_domain,
+                $nginxService->generateSubdomainConfig($domainOrSubdomain->fresh())
+            );
+        } else {
+            $nginxService->writeConfig(
+                $domainOrSubdomain->domain_name,
+                $nginxService->generateDomainConfig($domainOrSubdomain->fresh())
+            );
+        }
 
         return $certificate;
     }
@@ -198,9 +210,9 @@ class SSLService
     /**
      * Create .well-known/acme-challenge directory for HTTP-01 validation
      */
-    protected function createAcmeChallenge(Domain $domain): void
+    protected function createAcmeChallenge(Domain|Subdomain $domainOrSubdomain): void
     {
-        $challengeDir = $domain->document_root . '/.well-known/acme-challenge';
+        $challengeDir = $domainOrSubdomain->document_root . '/.well-known/acme-challenge';
 
         if (!File::exists($challengeDir)) {
             File::makeDirectory($challengeDir, 0755, true);
@@ -210,9 +222,11 @@ class SSLService
     /**
      * Install certificate to system location
      */
-    protected function installCertificate(Domain $domain): void
+    protected function installCertificate(Domain|Subdomain $domainOrSubdomain): void
     {
-        $domainName = $domain->domain_name;
+        $domainName = $domainOrSubdomain instanceof Subdomain 
+            ? $domainOrSubdomain->full_domain 
+            : $domainOrSubdomain->domain_name;
         $certDir = $this->certBasePath . '/' . $domainName;
 
         // Create certificate directory

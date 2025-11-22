@@ -48,6 +48,11 @@ class SubdomainService
             $this->createPhpFpmPool($subdomain, $parentDomain);
         }
 
+        // Issue SSL certificate if parent has SSL enabled
+        if ($subdomain->ssl_enabled) {
+            \App\Jobs\IssueSslCertificateJob::dispatch($subdomain);
+        }
+
         // Dispatch async reload job
         \App\Jobs\ReloadServicesJob::dispatch([$subdomain->php_version], 2);
 
