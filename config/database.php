@@ -69,6 +69,20 @@ return [
             'collation' => 'utf8mb4_unicode_ci',
         ],
 
+        'mail' => [
+            'driver' => 'mysql',
+            'host' => env('MAIL_DB_HOST', '127.0.0.1'),
+            'port' => env('MAIL_DB_PORT', '3306'),
+            'database' => env('MAIL_DB_DATABASE', 'npanel_mail'),
+            'username' => env('MAIL_DB_USERNAME', 'npanel_mail'),
+            'password' => env('MAIL_DB_PASSWORD', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'strict' => true,
+            'engine' => null,
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),

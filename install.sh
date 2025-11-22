@@ -670,6 +670,107 @@ print_final_info() {
     echo ""
 }
 
+setup_mail_database() {
+    print_status "Setting up mail server database..."
+    
+    # Generate random password for mail database
+    MAIL_DB_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-25)
+    MAIL_DB_NAME="npanel_mail"
+    MAIL_DB_USER="npanel_mail"
+    
+    # Create mail database and user
+    print_status "Creating mail database ${MAIL_DB_NAME}..."
+    
+    if [ -n "${NPANEL_MYSQL_ROOT_PASSWORD}" ]; then
+        MYSQL_CMD="mysql -u ${NPANEL_MYSQL_ROOT_USERNAME} -p${NPANEL_MYSQL_ROOT_PASSWORD}"
+    else
+        MYSQL_CMD="mysql"
+    fi
+    
+    $MYSQL_CMD <<EOF
+CREATE DATABASE IF NOT EXISTS ${MAIL_DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '${MAIL_DB_USER}'@'localhost' IDENTIFIED BY '${MAIL_DB_PASSWORD}';
+GRANT ALL PRIVILEGES ON ${MAIL_DB_NAME}.* TO '${MAIL_DB_USER}'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+    
+    print_success "Mail database created"
+    
+    # Create mail database tables
+    print_status "Creating mail server tables..."
+    
+    $MYSQL_CMD ${MAIL_DB_NAME} <<'EOF'
+-- Domains table (simplified for Postfix/Dovecot)
+CREATE TABLE IF NOT EXISTS domains (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    domain_name VARCHAR(255) NOT NULL UNIQUE,
+    status ENUM('pending', 'active', 'suspended', 'deleted') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_domain_name (domain_name),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Mailboxes table
+CREATE TABLE IF NOT EXISTS mailboxes (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    domain_id BIGINT UNSIGNED NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_encrypted VARCHAR(255) NOT NULL,
+    quota_mb INT NOT NULL DEFAULT 1000,
+    used_mb INT NOT NULL DEFAULT 0,
+    status ENUM('active', 'inactive', 'deleted') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE,
+    INDEX idx_email (email),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Mail aliases table (includes catch-all)
+CREATE TABLE IF NOT EXISTS mail_aliases (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    domain_id BIGINT UNSIGNED NOT NULL,
+    source VARCHAR(255) NOT NULL,
+    destination TEXT NOT NULL,
+    type ENUM('alias', 'catchall') DEFAULT 'alias',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE,
+    INDEX idx_source (source),
+    INDEX idx_type (type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+EOF
+    
+    print_success "Mail server tables created"
+    
+    # Add mail database credentials to .env
+    print_status "Adding mail database credentials to .env..."
+    
+    if ! grep -q "MAIL_DB_HOST" "${INSTALL_DIR}/.env"; then
+        cat >> "${INSTALL_DIR}/.env" <<EOF
+
+# Mail Server Database Configuration (for Postfix/Dovecot)
+MAIL_DB_HOST=127.0.0.1
+MAIL_DB_PORT=3306
+MAIL_DB_DATABASE=${MAIL_DB_NAME}
+MAIL_DB_USERNAME=${MAIL_DB_USER}
+MAIL_DB_PASSWORD=${MAIL_DB_PASSWORD}
+EOF
+        print_success "Mail database credentials added to .env"
+    else
+        print_warning "Mail database credentials already exist in .env"
+    fi
+    
+    # Store credentials for later use
+    export MAIL_DB_NAME
+    export MAIL_DB_USER
+    export MAIL_DB_PASSWORD
+    
+    print_success "Mail database setup completed"
+}
+
 install_mail_server() {
     print_status "Installing mail server components (Postfix, Dovecot, OpenDKIM, Roundcube)..."
     
@@ -681,6 +782,9 @@ install_mail_server() {
         print_warning "Skipping mail server installation"
         return
     fi
+    
+    # Setup mail database first
+    setup_mail_database
     
     print_status "Installing mail server packages..."
     
@@ -731,16 +835,14 @@ install_mail_server() {
     cd "$INSTALL_DIR"
     sudo -u www-data php artisan migrate --force
     
-    # Generate mail service configurations via Artisan
+    # Sync data to mail database
+    print_status "Syncing data to mail database..."
+    php artisan config:clear
+    php artisan mail:sync-database || print_warning "Could not sync mail database (might be empty)"
+    
+    # Generate mail service configurations
     print_status "Generating mail service configurations..."
-    sudo -u www-data php artisan tinker --execute="
-        \$postfixService = app(\App\Services\PostfixService::class);
-        \$dovecotService = app(\App\Services\DovecotService::class);
-        \$postfixService->generateConfigs();
-        \$postfixService->updateMainConfig();
-        \$dovecotService->generateAllConfigs();
-        echo 'Mail configurations generated\n';
-    "
+    php artisan mail:regenerate-configs || print_warning "Could not regenerate mail configs"
     
     # Reload services with new configs
     systemctl reload postfix dovecot opendkim
@@ -854,27 +956,51 @@ $config = [];
 // Database connection
 $config['db_dsnw'] = 'mysql://DB_USER_PLACEHOLDER:DB_PASS_PLACEHOLDER@localhost/DB_NAME_PLACEHOLDER';
 
-// IMAP/SMTP settings
-$config['default_host'] = 'ssl://localhost';
-$config['default_port'] = 993;
-$config['smtp_host'] = 'tls://localhost';
-$config['smtp_port'] = 587;
+// IMAP settings - connect to local Dovecot
+$config['default_host'] = 'localhost';
+$config['default_port'] = 143;
+$config['imap_conn_options'] = [
+    'ssl' => [
+        'verify_peer' => false,
+        'verify_peer_name' => false,
+    ],
+];
+$config['imap_auth_type'] = null;
+$config['imap_delimiter'] = '/';
+
+// SMTP settings - connect to local Postfix
+$config['smtp_host'] = 'localhost:587';
 $config['smtp_user'] = '%u';
 $config['smtp_pass'] = '%p';
+$config['smtp_conn_options'] = [
+    'ssl' => [
+        'verify_peer' => false,
+        'verify_peer_name' => false,
+    ],
+];
 
 // Security
 $config['des_key'] = 'RANDOM_KEY_PLACEHOLDER';
 $config['cipher_method'] = 'AES-256-CBC';
+$config['username_domain'] = '';
 
 // UI
 $config['product_name'] = 'nPanel Webmail';
 $config['support_url'] = '';
 $config['skin'] = 'elastic';
+$config['language'] = 'en_US';
+
+// Identities
+$config['identities_level'] = 0;
 
 // Misc
 $config['enable_installer'] = false;
 $config['log_driver'] = 'syslog';
 $config['syslog_facility'] = LOG_MAIL;
+$config['session_lifetime'] = 30;
+
+// Plugins
+$config['plugins'] = [];
 PHP_EOF
     
     # Generate random DES key

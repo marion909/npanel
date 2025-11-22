@@ -152,17 +152,18 @@ EOF;
     }
 
     /**
-     * Get database configuration from Laravel config.
+     * Get database configuration for mail server (Postfix/Dovecot).
+     * Uses dedicated MAIL_DB_* environment variables.
      *
      * @return array
      */
     private function getDatabaseConfig(): array
     {
         return [
-            'host' => config('database.connections.mysql.host', '127.0.0.1'),
-            'database' => config('database.connections.mysql.database', 'npanel'),
-            'username' => config('database.connections.mysql.username', 'npanel'),
-            'password' => config('database.connections.mysql.password', ''),
+            'host' => env('MAIL_DB_HOST', '127.0.0.1'),
+            'database' => env('MAIL_DB_DATABASE', 'npanel_mail'),
+            'username' => env('MAIL_DB_USERNAME', 'npanel_mail'),
+            'password' => env('MAIL_DB_PASSWORD', ''),
         ];
     }
 
