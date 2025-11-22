@@ -570,7 +570,8 @@ install_mail_server() {
     print_status "Creating mail database..."
     $MYSQL_CMD <<EOF
 CREATE DATABASE IF NOT EXISTS ${MAIL_DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '${MAIL_DB_USER}'@'localhost' IDENTIFIED BY '${MAIL_DB_PASSWORD}';
+DROP USER IF EXISTS '${MAIL_DB_USER}'@'localhost';
+CREATE USER '${MAIL_DB_USER}'@'localhost' IDENTIFIED WITH mysql_native_password BY '${MAIL_DB_PASSWORD}';
 GRANT ALL PRIVILEGES ON ${MAIL_DB_NAME}.* TO '${MAIL_DB_USER}'@'localhost';
 FLUSH PRIVILEGES;
 EOF

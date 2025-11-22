@@ -191,27 +191,19 @@ EOF;
 
         $dbConfig = $this->getDatabaseConfig();
 
-        // Dovecot 2.4+ requires inline configuration with sql_driver and mysql block
+        // Dovecot 2.3.x compatible configuration
         $content = <<<EOF
 # nPanel SQL Authentication
-# https://doc.dovecot.org/latest/core/config/auth/databases/sql.html
+# https://doc.dovecot.org/configuration_manual/authentication/sql/
 
-sql_driver = mysql
+driver = mysql
+connect = host={$dbConfig['host']} dbname={$dbConfig['database']} user={$dbConfig['username']} password={$dbConfig['password']}
 
-mysql localhost {
-  user = {$dbConfig['username']}
-  password = {$dbConfig['password']}
-  dbname = {$dbConfig['database']}
-}
+password_query = SELECT email as user, password_encrypted as password FROM mailboxes WHERE email='%u' AND status='active'
 
-passdb sql {
-  query = SELECT email as user, password_encrypted as password FROM mailboxes WHERE email='%{user}' AND status='active'
-}
+user_query = SELECT '/var/vmail' as home, 5000 as uid, 5000 as gid FROM mailboxes WHERE email='%u' AND status='active'
 
-userdb sql {
-  query = SELECT '/var/vmail' as home, 5000 as uid, 5000 as gid FROM mailboxes WHERE email='%{user}' AND status='active'
-  iterate_query = SELECT email as user FROM mailboxes WHERE status='active'
-}
+iterate_query = SELECT email as user FROM mailboxes WHERE status='active'
 
 EOF;
 
