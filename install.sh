@@ -278,7 +278,11 @@ install_npanel() {
     if [ ! -d "${INSTALL_DIR}" ]; then
         git clone https://github.com/marion909/npanel.git "${INSTALL_DIR}"
     else
-        print_warning "Directory ${INSTALL_DIR} already exists, skipping clone"
+        print_warning "Directory ${INSTALL_DIR} already exists, updating..."
+        cd "${INSTALL_DIR}"
+        # Reset any local changes and pull latest
+        git reset --hard
+        git pull
     fi
     
     cd "${INSTALL_DIR}"
@@ -343,6 +347,9 @@ install_npanel() {
     php artisan cache:clear
     php artisan route:clear
     php artisan view:clear
+    
+    # Remove cache files manually to avoid conflicts
+    rm -rf bootstrap/cache/*.php
     
     # Optimize Laravel
     php artisan config:cache
