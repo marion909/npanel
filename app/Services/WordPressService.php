@@ -33,22 +33,22 @@ class WordPressService
             'full_domain' => $fullDomain,
         ]);
 
-        // Generate credentials
-        $dbName = 'wp_' . Str::slug($subdomain->subdomain_name . '_' . Str::random(6), '_');
-        $dbUser = substr($dbName, 0, 16); // MySQL username limit
-        $dbPassword = Str::random(24);
+        // Generate WordPress admin credentials
         $wpAdminUser = 'admin';
         $wpAdminPassword = Str::random(16);
         $wpAdminEmail = 'admin@' . $domain->domain_name;
 
         try {
             // 1. Create database
-            Log::info('Creating database for WordPress', ['db_name' => $dbName]);
+            Log::info('Creating database for WordPress');
             $database = $this->databaseService->createDatabase($domain, [
-                'database_name' => $dbName,
-                'username' => $dbUser,
-                'password' => $dbPassword,
+                'display_name' => 'wp_' . $subdomain->subdomain_name,
             ]);
+            
+            // Use the generated database credentials
+            $dbName = $database->database_name;
+            $dbUser = $database->username;
+            $dbPassword = $database->password;
 
             // 2. Download WordPress
             $wpPath = $subdomain->document_root;
