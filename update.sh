@@ -448,8 +448,49 @@ check_mail_server_update() {
         # Enable submission port (587) if not already enabled
         if ! grep -q "^submission inet" /etc/postfix/master.cf; then
             print_status "Enabling submission port (587) for SMTP authentication..."
-            sed -i 's/^#submission inet/submission inet/' /etc/postfix/master.cf
-            sed -i '/^submission inet/,/^#.*/ { /^#  -o smtpd_tls_security_level=/s/^#//; /^#  -o smtpd_sasl_auth_enable=/s/^#//; /^#  -o smtpd_tls_auth_only=/s/^#//; /^#  -o smtpd_client_restrictions=/s/^#//; /^#  -o smtpd_sender_login_maps=/s/^#//; /^#  -o smtpd_sender_restrictions=/s/^#//; /^#  -o smtpd_recipient_restrictions=/s/^#//; }' /etc/postfix/master.cf
+            cat >> /etc/postfix/master.cf << 'SUBMISSION_EOF'
+
+# Submission port for authenticated SMTP (port 587)
+submission inet n       -       y       -       -       smtpd
+  -o syslog_name=postfix/submission
+  -o smtpd_tls_security_level=may
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_tls_auth_only=no
+  -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+  -o smtpd_sender_login_maps=mysql:/etc/postfix/mysql/virtual-sender-login-maps.cf
+  -o smtpd_sender_restrictions=reject_sender_login_mismatch
+  -o smtpd_recipient_restrictions=reject_non_fqdn_recipient,reject_unknown_recipient_domain,permit_sasl_authenticated,reject
+SUBMISSION_EOF
+        fi
+        
+        # Ensure SASL is configured
+        postconf -e "smtpd_sasl_type=dovecot"
+        postconf -e "smtpd_sasl_path=private/auth"
+        postconf -e "smtpd_sasl_auth_enable=yes"
+        
+        # Update submission port TLS settings if needed
+        if grep -q "smtpd_tls_security_level=encrypt" /etc/postfix/master.cf; then
+            print_status "Updating submission port TLS settings..."
+            sed -i 's/smtpd_tls_security_level=encrypt/smtpd_tls_security_level=may/' /etc/postfix/master.cf
+            sed -i 's/smtpd_tls_auth_only=yes/smtpd_tls_auth_only=no/' /etc/postfix/master.cf
+        fi
+        
+        # Create sender login maps if not exists
+        if [ ! -f /etc/postfix/mysql/virtual-sender-login-maps.cf ]; then
+            MAIL_DB_USERNAME=$(grep MAIL_DB_USERNAME "${INSTALL_DIR}/.env" | cut -d '=' -f2)
+            MAIL_DB_PASSWORD=$(grep MAIL_DB_PASSWORD "${INSTALL_DIR}/.env" | cut -d '=' -f2)
+            MAIL_DB_DATABASE=$(grep MAIL_DB_DATABASE "${INSTALL_DIR}/.env" | cut -d '=' -f2)
+            
+            mkdir -p /etc/postfix/mysql
+            cat > /etc/postfix/mysql/virtual-sender-login-maps.cf << EOF
+user = ${MAIL_DB_USERNAME}
+password = ${MAIL_DB_PASSWORD}
+hosts = 127.0.0.1
+dbname = ${MAIL_DB_DATABASE}
+query = SELECT email FROM mailboxes WHERE email='%s' AND status='active'
+EOF
+            chmod 640 /etc/postfix/mysql/virtual-sender-login-maps.cf
+            chown root:postfix /etc/postfix/mysql/virtual-sender-login-maps.cf
         fi
         
         # Sync data to mail database
