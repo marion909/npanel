@@ -27,10 +27,10 @@
                         <span class="text-sm text-gray-700">{{ user?.name }}</span>
                         
                         <!-- Settings Dropdown -->
-                        <div class="relative" @mouseleave="showSettings = false">
+                        <div class="relative" @mouseleave="hideSettingsWithDelay">
                             <button 
-                                @click="showSettings = !showSettings"
-                                @mouseenter="showSettings = true"
+                                @click="toggleSettings"
+                                @mouseenter="showSettingsMenu"
                                 class="text-gray-600 hover:text-gray-900 p-2 rounded-md hover:bg-gray-100 transition"
                                 aria-label="Settings"
                             >
@@ -43,7 +43,7 @@
                             <!-- Dropdown Menu -->
                             <div 
                                 v-show="showSettings"
-                                @mouseenter="showSettings = true"
+                                @mouseenter="showSettingsMenu"
                                 class="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
                             >
                                 <div class="py-1">
@@ -94,11 +94,39 @@
 
 <script setup>
 import { Link } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, onUnmounted } from 'vue';
 
 defineProps({
     user: Object
 });
 
 const showSettings = ref(false);
+let hideTimeout = null;
+
+const showSettingsMenu = () => {
+    // Cancel any pending hide operation
+    if (hideTimeout) {
+        clearTimeout(hideTimeout);
+        hideTimeout = null;
+    }
+    showSettings.value = true;
+};
+
+const hideSettingsWithDelay = () => {
+    // Add a small delay before hiding to allow mouse to move to dropdown
+    hideTimeout = setTimeout(() => {
+        showSettings.value = false;
+    }, 150); // 150ms delay
+};
+
+const toggleSettings = () => {
+    showSettings.value = !showSettings.value;
+};
+
+// Clean up timeout on component unmount
+onUnmounted(() => {
+    if (hideTimeout) {
+        clearTimeout(hideTimeout);
+    }
+});
 </script>
