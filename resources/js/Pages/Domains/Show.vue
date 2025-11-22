@@ -681,12 +681,14 @@ const startWordPressPolling = (subdomainId) => {
             })
             .then(data => {
                 // Credentials are ready
-                wordPressCredentials.value = data;
-                showWordPressCredentials.value = true;
-                
-                // Stop polling
-                clearInterval(wordPressPollingInterval.value);
-                wordPressPollingInterval.value = null;
+                if (data.success && data.credentials) {
+                    wordPressCredentials.value = data.credentials;
+                    showWordPressCredentials.value = true;
+                    
+                    // Stop polling
+                    clearInterval(wordPressPollingInterval.value);
+                    wordPressPollingInterval.value = null;
+                }
             })
             .catch(() => {
                 // Not ready yet, continue polling
