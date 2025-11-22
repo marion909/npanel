@@ -154,6 +154,14 @@ class NginxService
 
         $outputString = implode("\n", $output);
         
+        // Fix common http2 directive issues automatically
+        if (preg_match('/unknown directive "http2"/i', $outputString)) {
+            $this->fixHttp2Directives();
+            // Re-test after fixing
+            exec($command . ' 2>&1', $output, $returnCode);
+            $outputString = implode("\n", $output);
+        }
+        
         // Check if there's a real error (not just warnings)
         // nginx -t returns 0 on success, even with warnings
         // Only fail if there's an actual error line containing "emerg" or "error:"
@@ -164,6 +172,42 @@ class NginxService
             'output' => $outputString,
             'return_code' => $returnCode,
         ];
+    }
+
+    /**
+     * Fix http2 directive issues in all Nginx configs
+     */
+    protected function fixHttp2Directives(): void
+    {
+        $configs = glob($this->sitesAvailable . '/*.conf');
+        
+        foreach ($configs as $configPath) {
+            $content = File::get($configPath);
+            $modified = false;
+            
+            // Fix: listen 443 ssl http2; -> listen 443 ssl;
+            if (preg_match('/listen\s+443\s+ssl\s+http2;/', $content)) {
+                $content = preg_replace('/listen\s+443\s+ssl\s+http2;/', 'listen 443 ssl;', $content);
+                $modified = true;
+            }
+            
+            // Fix: listen [::]:443 ssl http2; -> listen [::]:443 ssl;
+            if (preg_match('/listen\s+\[::\]:443\s+ssl\s+http2;/', $content)) {
+                $content = preg_replace('/listen\s+\[::\]:443\s+ssl\s+http2;/', 'listen [::]:443 ssl;', $content);
+                $modified = true;
+            }
+            
+            // Fix: http2 on; directive (remove it)
+            if (preg_match('/\s+http2\s+on;/', $content)) {
+                $content = preg_replace('/\s+http2\s+on;/', '', $content);
+                $modified = true;
+            }
+            
+            if ($modified) {
+                File::put($configPath, $content);
+                \Log::info("Fixed http2 directives in: {$configPath}");
+            }
+        }
     }
 
     /**
