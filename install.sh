@@ -638,11 +638,18 @@ stdout_logfile=${INSTALL_DIR}/storage/logs/worker.log
 stopwaitsecs=3600
 EOF
     
+    # Enable and start supervisor service
+    systemctl enable supervisor
+    systemctl start supervisor
+    
+    # Wait a moment for supervisor to start
+    sleep 2
+    
     supervisorctl reread
     supervisorctl update
     supervisorctl start npanel-worker:*
     
-    print_success "Supervisor configured"
+    print_success "Supervisor configured and workers started"
 }
 
 configure_cron() {

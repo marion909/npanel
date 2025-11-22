@@ -112,6 +112,14 @@ stop_queue_workers() {
 start_queue_workers() {
     print_status "Starting queue workers..."
     
+    # Enable and start supervisor service if not running
+    if ! systemctl is-active --quiet supervisor; then
+        print_status "Starting supervisor service..."
+        systemctl enable supervisor
+        systemctl start supervisor
+        sleep 2
+    fi
+    
     # Create supervisor config if it doesn't exist
     if [ ! -f /etc/supervisor/conf.d/npanel-worker.conf ]; then
         print_status "Creating supervisor configuration..."
@@ -135,6 +143,11 @@ EOF
     supervisorctl reread 2>/dev/null || true
     supervisorctl update 2>/dev/null || true
     supervisorctl start npanel-worker:* 2>/dev/null || print_warning "Could not start queue workers"
+    
+    # Show status
+    sleep 1
+    print_status "Queue worker status:"
+    supervisorctl status npanel-worker:* 2>/dev/null || print_warning "Could not get worker status"
 }
 
 pull_latest_code() {
