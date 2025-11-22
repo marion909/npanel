@@ -8,15 +8,34 @@
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
 </p>
 
-A modern, powerful web hosting control panel similar to aaPanel/cPanel, built with cutting-edge technologies. Manage domains, subdomains, Nginx virtual hosts, multi-version PHP-FPM pools, and automated SSL certificates with ease.
+<p align="center">
+  <strong>🌐 <a href="https://npanel.at">npanel.at</a> | 📧 <a href="https://webmail.npanel.at">Webmail</a> | 📚 <a href="#-quick-installation">Installation</a></strong>
+</p>
+
+A modern, powerful web hosting control panel similar to aaPanel/cPanel, built with cutting-edge technologies. Manage domains, subdomains, Nginx virtual hosts, multi-version PHP-FPM pools, mail servers, databases, and automated SSL certificates with ease.
 
 ## ✨ Features
 
 ### 🌐 Domain Management
 - **Full CRUD Operations** - Create, read, update, and delete domains
 - **Subdomain Support** - Unlimited subdomains per domain with individual configurations
-- **Automatic DNS Integration** - Ready for external DNS providers
+- **Automatic Nginx Configuration** - Virtual hosts generated from templates
 - **Bulk Operations** - Manage multiple domains efficiently
+
+### 📧 Mail Server (Full Stack)
+- **Postfix SMTP** - Reliable mail transfer agent on ports 25/587
+- **Dovecot IMAP** - Secure mail access on port 143 with SQL authentication
+- **Roundcube Webmail** - Modern web interface at webmail.npanel.at
+- **Virtual Mailboxes** - MySQL-backed mailboxes with per-domain management
+- **SASL Authentication** - Secure SMTP submission via Dovecot
+- **Sender Login Maps** - Anti-spoofing protection
+- **Automated Setup** - Complete mail stack configured by installer
+
+### 🗄️ Database Management
+- **MySQL/MariaDB** - Full database server support
+- **phpMyAdmin Integration** - Web-based database management
+- **Per-Domain Databases** - Isolated database access for each domain
+- **Automated Backups** - Scheduled database backups
 
 ### ⚙️ PHP-FPM Multi-Version
 - **PHP 7.4 to 8.3** - Switch between PHP versions per domain/subdomain
@@ -61,6 +80,10 @@ A modern, powerful web hosting control panel similar to aaPanel/cPanel, built wi
 | **Web Server** | Nginx (managed by panel) |
 | **PHP Runtime** | Multi-version PHP-FPM (7.4-8.3) |
 | **SSL Provider** | Let's Encrypt via acme.sh |
+| **Mail Server (SMTP)** | Postfix 3.x |
+| **Mail Server (IMAP)** | Dovecot 2.4+ |
+| **Webmail** | Roundcube 1.6+ |
+| **Database Management** | phpMyAdmin |
 | **Authentication** | Laravel Sanctum |
 
 ## 📋 Requirements
@@ -98,6 +121,8 @@ The installer will:
 - ✅ Install all system dependencies (Nginx, Redis, MySQL, PHP versions)
 - ✅ Set up PHP-FPM pools for PHP 7.4, 8.0, 8.1, 8.2, 8.3
 - ✅ Install and configure acme.sh for SSL
+- ✅ Install and configure mail server (Postfix + Dovecot + Roundcube)
+- ✅ Set up phpMyAdmin for database management
 - ✅ Create database and user with secure password
 - ✅ Install PHP and Node.js dependencies
 - ✅ Configure Nginx virtual host for the panel
@@ -141,6 +166,36 @@ Login with the admin credentials you created during installation.
 4. **Configure** - Choose PHP version, set custom document root
 5. **SSL Coverage** - Covered by parent domain's wildcard certificate
 
+### Mail Server Management
+
+Access webmail at **[webmail.npanel.at](https://webmail.npanel.at)**
+
+#### Creating Mailboxes
+
+1. **Navigate to Domains** - Select your domain
+2. **Mailboxes Tab** - View existing mailboxes
+3. **Add Mailbox** - Enter email address and password
+4. **Configure Quota** - Set storage limits per mailbox
+
+#### Email Client Configuration
+
+**IMAP Settings:**
+- Server: `mail.yourdomain.com`
+- Port: `143` (STARTTLS) or `993` (SSL/TLS)
+- Authentication: Email address and password
+
+**SMTP Settings:**
+- Server: `mail.yourdomain.com`
+- Port: `587` (STARTTLS - recommended) or `25`
+- Authentication: Email address and password
+
+#### Features
+- Virtual mailboxes with MySQL backend
+- SASL authentication via Dovecot
+- Sender login maps for anti-spoofing
+- Automated mail server configuration
+- IPv4 preference for reliable delivery
+
 ### API Usage
 
 nPanel provides a RESTful API with Sanctum authentication:
@@ -173,12 +228,20 @@ Business logic is encapsulated in service classes:
 - `PhpFpmService` - Multi-version pool management
 - `SSLService` - Let's Encrypt automation
 - `SubdomainService` - Subdomain operations
+- `MailService` - Mailbox and alias management
+- `PostfixService` - SMTP server configuration
+- `DovecotService` - IMAP server and authentication setup
+- `DatabaseService` - MySQL database and user management
+- `PhpMyAdminService` - phpMyAdmin integration
 
 ### Queue-Based Operations
 Long-running tasks are dispatched to background jobs:
 - `ActivateDomainJob` - Domain directory creation, config generation, service reloads
 - `IssueSslCertificateJob` - Certificate issuance and installation
 - `RenewSslCertificatesJob` - Automatic renewal for expiring certificates
+- `InstallMailServerJob` - Complete mail server stack setup
+- `DeleteDomainJob` - Clean removal of domains and associated resources
+- `ReloadServicesJob` - Safe service reload after configuration changes
 
 ### Database Schema
 ```
@@ -206,6 +269,17 @@ php_fpm_pools
   - id, domain_id
   - pool_name, php_version, socket_path
   - pm_mode, pm_max_children, memory_limit
+
+mailboxes
+  - id, domain_id, email, password
+  - quota, status
+
+mail_aliases
+  - id, domain_id, source, destination
+
+databases
+  - id, user_id, database_name
+  - username, password, host
 ```
 
 ## 🔧 Configuration
@@ -336,6 +410,38 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
+### Mail Server Issues?
+
+**Check Services:**
+```bash
+sudo systemctl status postfix dovecot
+journalctl -u postfix -f
+journalctl -u dovecot -f
+```
+
+**Test IMAP Authentication:**
+```bash
+doveadm auth test user@domain.com password
+```
+
+**Check Mail Queue:**
+```bash
+postqueue -p
+```
+
+**Reset Mailbox Password:**
+```bash
+./reset-mailbox-password.sh user@domain.com newpassword
+```
+
+**Test SMTP Sending:**
+```bash
+telnet localhost 587
+EHLO localhost
+AUTH LOGIN
+# Use base64 encoded credentials
+```
+
 ### Permission Errors?
 ```bash
 sudo chown -R www-data:www-data /var/www/npanel/storage
@@ -352,6 +458,12 @@ sudo tail -f /var/log/php8.3-fpm.log
 - Verify domain DNS points to server
 - Ensure port 80 is accessible
 - Check acme.sh logs: `~/.acme.sh/acme.sh --log`
+
+## 🌟 Demo
+
+Visit **[npanel.at](https://npanel.at)** to see nPanel in action!
+
+**Webmail Access:** [webmail.npanel.at](https://webmail.npanel.at)
 
 ## 📄 License
 
