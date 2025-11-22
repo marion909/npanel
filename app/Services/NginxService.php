@@ -41,12 +41,12 @@ class NginxService
     {
         $parentDomain = $subdomain->parentDomain;
 
-        // Determine SSL paths (use parent domain's certificate or own)
+        // Determine SSL paths (use subdomain's own certificate if available, otherwise parent's)
         $sslCertPath = $subdomain->ssl_enabled
-            ? ($parentDomain->ssl_cert_path ?? '')
+            ? ($subdomain->ssl_cert_path ?? $parentDomain->ssl_cert_path ?? '')
             : '';
         $sslKeyPath = $subdomain->ssl_enabled
-            ? ($parentDomain->ssl_key_path ?? '')
+            ? ($subdomain->ssl_key_path ?? $parentDomain->ssl_key_path ?? '')
             : '';
 
         // Determine PHP-FPM socket
