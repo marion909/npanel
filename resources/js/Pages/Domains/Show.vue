@@ -156,7 +156,13 @@
                                             <span class="text-xs px-2 py-1 bg-purple-100 text-purple-800 rounded">
                                                 PHP {{ subdomain.php_version }}
                                             </span>
-                                            <span v-if="subdomain.ssl_enabled" class="text-xs text-green-600">SSL Enabled</span>
+                                            <span v-if="subdomain.ssl_enabled" class="text-xs px-2 py-1 bg-green-100 text-green-800 rounded flex items-center">
+                                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                                SSL
+                                            </span>
+                                            <span v-else class="text-xs text-gray-500">No SSL</span>
                                             <span v-if="subdomain.wordpress_installed" class="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded flex items-center">
                                                 <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                                     <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
@@ -165,16 +171,26 @@
                                             </span>
                                         </div>
                                     </div>
-                                    <div class="flex space-x-2">
+                                    <div class="flex flex-wrap gap-2 justify-end">
+                                        <button v-if="!subdomain.ssl_enabled" 
+                                                @click="enableSsl(subdomain)" 
+                                                class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm whitespace-nowrap">
+                                            Enable SSL
+                                        </button>
+                                        <button v-if="!subdomain.wordpress_installed" 
+                                                @click="installWordPressOnSubdomain(subdomain)" 
+                                                class="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm whitespace-nowrap">
+                                            🚀 Install WordPress
+                                        </button>
                                         <button v-if="subdomain.wordpress_installed" 
                                                 @click="showWordPressInfo(subdomain)" 
-                                                class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm">
+                                                class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm whitespace-nowrap">
                                             WP Info
                                         </button>
-                                        <button @click="editSubdomain(subdomain)" class="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
+                                        <button @click="editSubdomain(subdomain)" class="px-3 py-1 text-blue-600 hover:text-blue-800 text-sm border border-blue-600 rounded whitespace-nowrap">Edit</button>
                                         <button v-if="!['www', '@'].includes(subdomain.subdomain_name)" 
                                                 @click="deleteSubdomain(subdomain)" 
-                                                class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                                                class="px-3 py-1 text-red-600 hover:text-red-800 text-sm border border-red-600 rounded whitespace-nowrap">Delete</button>
                                     </div>
                                 </div>
                             </div>
@@ -813,6 +829,39 @@ const deleteSubdomain = (subdomain) => {
             },
             onError: (errors) => {
                 alert('Failed to delete subdomain: ' + Object.values(errors).join(', '));
+            }
+        });
+    }
+};
+
+// Enable SSL for subdomain
+const enableSsl = (subdomain) => {
+    if (confirm(`Enable SSL certificate for ${subdomain.subdomain_name}.${props.domain.domain_name}?`)) {
+        router.post(`/domains/${props.domain.id}/subdomains/${subdomain.id}/ssl`, {}, {
+            preserveScroll: true,
+            onSuccess: () => {
+                alert('SSL certificate issuance started. This may take a few minutes.');
+            },
+            onError: (errors) => {
+                alert('Failed to enable SSL: ' + Object.values(errors).join(', '));
+            }
+        });
+    }
+};
+
+// Install WordPress on existing subdomain
+const installWordPressOnSubdomain = (subdomain) => {
+    if (confirm(`Install WordPress on ${subdomain.subdomain_name}.${props.domain.domain_name}?`)) {
+        router.post(`/domains/${props.domain.id}/subdomains/${subdomain.id}/wordpress`, {}, {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                // Start polling for credentials
+                if (page.props.flash?.subdomain_id) {
+                    startWordPressPolling(page.props.flash.subdomain_id);
+                }
+            },
+            onError: (errors) => {
+                alert('Failed to install WordPress: ' + Object.values(errors).join(', '));
             }
         });
     }

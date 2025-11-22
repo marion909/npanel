@@ -153,4 +153,65 @@ class SubdomainController extends Controller
             'credentials' => $credentials,
         ]);
     }
+
+    /**
+     * Enable SSL for subdomain
+     */
+    public function enableSsl(Domain $domain, Subdomain $subdomain)
+    {
+        try {
+            if ($subdomain->ssl_enabled) {
+                return back()->with('info', 'SSL is already enabled for this subdomain.');
+            }
+
+            // Dispatch SSL certificate issuance job
+            \App\Jobs\IssueSslCertificateJob::dispatch($subdomain);
+
+            Log::info('SSL certificate issuance started for subdomain', [
+                'subdomain_id' => $subdomain->id,
+                'full_domain' => $subdomain->full_domain,
+            ]);
+
+            return back()->with('success', "SSL certificate issuance started for '{$subdomain->full_domain}'. This may take a few minutes.");
+        } catch (\Exception $e) {
+            Log::error('Failed to enable SSL for subdomain', [
+                'subdomain_id' => $subdomain->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Failed to enable SSL: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Install WordPress on existing subdomain
+     */
+    public function installWordPress(Domain $domain, Subdomain $subdomain)
+    {
+        try {
+            if ($subdomain->wordpress_installed) {
+                return back()->with('info', 'WordPress is already installed on this subdomain.');
+            }
+
+            // Dispatch WordPress installation job
+            InstallWordPressJob::dispatch($subdomain);
+
+            Log::info('WordPress installation started for subdomain', [
+                'subdomain_id' => $subdomain->id,
+                'full_domain' => $subdomain->full_domain,
+            ]);
+
+            return back()->with([
+                'success' => "WordPress installation started for '{$subdomain->full_domain}'. Check back in a few moments.",
+                'subdomain_id' => $subdomain->id,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to install WordPress on subdomain', [
+                'subdomain_id' => $subdomain->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Failed to install WordPress: ' . $e->getMessage());
+        }
+    }
 }

@@ -35,6 +35,8 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/domains/{domain}/subdomains/{subdomain}', [App\Http\Controllers\SubdomainController::class, 'update'])->name('subdomains.update');
     Route::delete('/domains/{domain}/subdomains/{subdomain}', [App\Http\Controllers\SubdomainController::class, 'destroy'])->name('subdomains.destroy');
     Route::get('/domains/{domain}/subdomains/{subdomain}/wordpress-credentials', [App\Http\Controllers\SubdomainController::class, 'wordpressCredentials'])->name('subdomains.wordpress-credentials');
+    Route::post('/domains/{domain}/subdomains/{subdomain}/ssl', [App\Http\Controllers\SubdomainController::class, 'enableSsl'])->name('subdomains.ssl');
+    Route::post('/domains/{domain}/subdomains/{subdomain}/wordpress', [App\Http\Controllers\SubdomainController::class, 'installWordPress'])->name('subdomains.wordpress');
     
     // File Manager
     Route::get('/domains/{domain}/files', [App\Http\Controllers\FileManagerController::class, 'index'])->name('domains.files');
