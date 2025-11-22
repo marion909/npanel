@@ -27,7 +27,8 @@ class SubdomainService
             [
                 'document_root' => $data['document_root'] ?? $this->getDefaultDocumentRoot($parentDomain, $data['subdomain_name']),
                 'php_version' => $data['php_version'] ?? $parentDomain->php_version,
-                'ssl_enabled' => $data['ssl_enabled'] ?? false,
+                // Auto-enable SSL if parent domain has SSL
+                'ssl_enabled' => $data['ssl_enabled'] ?? $parentDomain->ssl_enabled,
             ]
         );
 
