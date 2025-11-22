@@ -110,29 +110,38 @@ install_mysql() {
 install_php_versions() {
     print_status "Adding PHP repository..."
     
-    # Check if this is Ubuntu/Debian based system
-    if [ -f /etc/debian_version ]; then
-        # Try to add ondrej/php repository
-        if command -v add-apt-repository &> /dev/null; then
-            add-apt-repository ppa:ondrej/php -y 2>/dev/null || {
-                print_warning "Could not add PPA, trying alternative method"
-                # Alternative method for systems without add-apt-repository
-                apt install -y lsb-release ca-certificates apt-transport-https
-                wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg 2>/dev/null || true
-                echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/php.list
-            }
-        else
-            print_warning "add-apt-repository not available, using direct repository add"
-            apt install -y lsb-release ca-certificates apt-transport-https curl
-            curl -sSL https://packages.sury.org/php/README.txt
-            wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
-            echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/php.list
-        fi
-        apt update
+    # Check if this is Ubuntu or Debian
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_ID=$ID
     else
-        print_error "This script only supports Debian/Ubuntu based systems"
+        print_error "Cannot determine operating system"
         exit 1
     fi
+    
+    # Install prerequisites
+    apt install -y lsb-release ca-certificates apt-transport-https wget gnupg2
+    
+    if [ "$OS_ID" = "ubuntu" ]; then
+        # Ubuntu: Use ondrej/php PPA
+        print_status "Detected Ubuntu, adding ondrej/php PPA..."
+        if command -v add-apt-repository &> /dev/null; then
+            add-apt-repository ppa:ondrej/php -y
+        else
+            apt install -y software-properties-common
+            add-apt-repository ppa:ondrej/php -y
+        fi
+    elif [ "$OS_ID" = "debian" ]; then
+        # Debian: Use Sury PHP repository
+        print_status "Detected Debian, adding Sury PHP repository..."
+        wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+        echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
+    else
+        print_error "Unsupported operating system: $OS_ID"
+        exit 1
+    fi
+    
+    apt update
     
     for version in "${PHP_VERSIONS[@]}"; do
         print_status "Installing PHP ${version}..."
