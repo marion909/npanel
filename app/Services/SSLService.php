@@ -82,10 +82,19 @@ class SSLService
         ]);
 
         // Regenerate Nginx config with SSL
-        app(NginxService::class)->writeConfig(
-            $domain->domain_name,
-            app(NginxService::class)->generateDomainConfig($domain->fresh())
-        );
+        if ($domainOrSubdomain instanceof Domain) {
+            $nginxService = app(NginxService::class);
+            $nginxService->writeConfig(
+                $domainOrSubdomain->domain_name,
+                $nginxService->generateDomainConfig($domainOrSubdomain->fresh())
+            );
+        } elseif ($domainOrSubdomain instanceof Subdomain) {
+            $nginxService = app(NginxService::class);
+            $nginxService->writeConfig(
+                $domainOrSubdomain->full_domain,
+                $nginxService->generateSubdomainConfig($domainOrSubdomain->fresh())
+            );
+        }
 
         return $certificate;
     }
