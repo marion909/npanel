@@ -51,7 +51,7 @@ class RegenerateMailConfigs extends Command
 
             // Regenerate Dovecot configs
             $this->info('Generating Dovecot configuration files...');
-            $this->dovecotService->generateSqlConfig();
+            $this->dovecotService->generateAllConfigs();
             $this->info('✓ Dovecot configs generated');
 
             // Test configurations

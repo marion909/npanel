@@ -68,6 +68,9 @@ EOF;
         // Disable system auth
         $content = preg_replace('/^!include auth-system\.conf\.ext$/m', '#!include auth-system.conf.ext', $content);
         
+        // Disable dict auth (can conflict with SQL auth)
+        $content = preg_replace('/^!include auth-dict\.conf\.ext$/m', '#!include auth-dict.conf.ext', $content);
+        
         // Enable SQL auth if not already enabled
         if (!preg_match('/^!include auth-sql\.conf\.ext$/m', $content)) {
             $content = preg_replace('/#!include auth-sql\.conf\.ext/m', '!include auth-sql.conf.ext', $content);
@@ -170,7 +173,7 @@ EOF;
     }
 
     /**
-     * Update auth-sql.conf.ext to use dovecot-sql.conf.ext.
+     * Update auth-sql.conf.ext with inline SQL configuration (Dovecot 2.4+ format).
      *
      * @return void
      * @throws Exception
@@ -186,22 +189,39 @@ EOF;
         // Backup current config
         File::copy($sqlAuthConfigPath, "{$sqlAuthConfigPath}.backup." . time());
 
+        $dbConfig = $this->getDatabaseConfig();
+
+        // Dovecot 2.4+ requires inline configuration with sql_driver and mysql block
         $content = <<<EOF
 # nPanel SQL Authentication
-passdb {
-  driver = sql
-  args = /etc/dovecot/dovecot-sql.conf.ext
+# https://doc.dovecot.org/latest/core/config/auth/databases/sql.html
+
+sql_driver = mysql
+
+mysql localhost {
+  user = {$dbConfig['username']}
+  password = {$dbConfig['password']}
+  dbname = {$dbConfig['database']}
 }
 
-userdb {
-  driver = sql
-  args = /etc/dovecot/dovecot-sql.conf.ext
+passdb sql {
+  query = SELECT email as user, password_encrypted as password FROM mailboxes WHERE email='%{user}' AND status='active'
+}
+
+userdb sql {
+  query = SELECT '/var/vmail' as home, 5000 as uid, 5000 as gid FROM mailboxes WHERE email='%{user}' AND status='active'
+  iterate_query = SELECT email as user FROM mailboxes WHERE status='active'
 }
 
 EOF;
 
         File::put($sqlAuthConfigPath, $content);
-        Log::info("Updated auth-sql.conf.ext");
+        
+        // Set secure permissions (root:root 600)
+        Process::run("chmod 600 {$sqlAuthConfigPath}");
+        Process::run("chown root:root {$sqlAuthConfigPath}");
+        
+        Log::info("Updated auth-sql.conf.ext with Dovecot 2.4+ inline configuration");
     }
 
     /**
@@ -268,11 +288,10 @@ EOF;
      */
     public function generateAllConfigs(): void
     {
-        $this->generateSqlConfig();
+        $this->updateSqlAuthConfig(); // Now includes inline SQL config (Dovecot 2.4+ format)
         $this->updateAuthConfig();
         $this->updateMailConfig();
         $this->updateMasterConfig();
-        $this->updateSqlAuthConfig();
 
         Log::info("Generated all Dovecot configuration files");
     }
