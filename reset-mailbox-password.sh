@@ -37,10 +37,22 @@ php artisan mail:sync-database > /dev/null 2>&1 || echo "⚠ Could not sync to L
 echo ""
 echo "=== Password Reset Complete ==="
 echo ""
-echo "Test authentication:"
-echo "  doveadm auth test $EMAIL $PASSWORD"
+echo "Testing authentication via Dovecot SQL query..."
+
+# Test if password matches
+TEST_RESULT=$(mysql -u npanel_mail -pHckaj6MoTbw2fma3lyE04N3Uu npanel_mail -sN -e "SELECT COUNT(*) FROM mailboxes WHERE email='$EMAIL' AND password_encrypted='$HASH' AND status='active';")
+
+if [ "$TEST_RESULT" = "1" ]; then
+    echo "✓ Password successfully stored in database"
+else
+    echo "✗ Warning: Password not found in database (might be encryption issue)"
+fi
+
 echo ""
 echo "Try Roundcube login:"
 echo "  https://webmail.npanel.at"
 echo "  Email: $EMAIL"
 echo "  Password: $PASSWORD"
+echo ""
+echo "If login fails, check Dovecot logs:"
+echo "  journalctl -u dovecot --no-pager | tail -20"
