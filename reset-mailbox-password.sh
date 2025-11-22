@@ -20,25 +20,19 @@ HASH=$(php -r "echo crypt('$PASSWORD', '\\\$6\\\$rounds=5000\\\$' . substr(base6
 
 echo "Generated password hash: ${HASH:0:30}..."
 
-# Update in SQLite (main database)
-sqlite3 /var/www/npanel/database/database.sqlite "UPDATE mailboxes SET password_encrypted='$HASH', updated_at=CURRENT_TIMESTAMP WHERE email='$EMAIL';"
-
-if [ $? -eq 0 ]; then
-    echo "✓ Updated in SQLite"
-else
-    echo "✗ Failed to update SQLite"
-    exit 1
-fi
-
-# Update in MySQL (mail database)
+# Update in MySQL (mail database) - This is what Dovecot uses
 mysql -u npanel_mail -pHckaj6MoTbw2fma3lyE04N3Uu npanel_mail -e "UPDATE mailboxes SET password_encrypted='$HASH', updated_at=NOW() WHERE email='$EMAIL';"
 
 if [ $? -eq 0 ]; then
-    echo "✓ Updated in MySQL"
+    echo "✓ Updated in MySQL (mail database)"
 else
     echo "✗ Failed to update MySQL"
     exit 1
 fi
+
+# Also sync to Laravel database via artisan command
+cd /var/www/npanel
+php artisan mail:sync-database > /dev/null 2>&1 || echo "⚠ Could not sync to Laravel database (non-critical)"
 
 echo ""
 echo "=== Password Reset Complete ==="
