@@ -825,8 +825,32 @@ install_mail_server() {
         return
     fi
     
-    # Setup mail database first
-    setup_mail_database
+    # Setup mail database
+    print_status "Setting up mail server database..."
+    
+    # Generate random password for mail database
+    MAIL_DB_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-25)
+    MAIL_DB_NAME="npanel_mail"
+    MAIL_DB_USER="npanel_mail"
+    
+    # Get MySQL credentials from .env
+    cd "${INSTALL_DIR}"
+    if grep -q "MYSQL_ROOT_PASSWORD" .env; then
+        MYSQL_ROOT_USER=$(grep "MYSQL_ROOT_USERNAME" .env | cut -d '=' -f2)
+        MYSQL_ROOT_PASS=$(grep "MYSQL_ROOT_PASSWORD" .env | cut -d '=' -f2)
+        MYSQL_CMD="mysql -u ${MYSQL_ROOT_USER} -p${MYSQL_ROOT_PASS}"
+    else
+        MYSQL_CMD="mysql"
+    fi
+    
+    # Create mail database and user
+    print_status "Creating mail database..."
+    $MYSQL_CMD <<EOF
+CREATE DATABASE IF NOT EXISTS ${MAIL_DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '${MAIL_DB_USER}'@'localhost' IDENTIFIED BY '${MAIL_DB_PASSWORD}';
+GRANT ALL PRIVILEGES ON ${MAIL_DB_NAME}.* TO '${MAIL_DB_USER}'@'localhost';
+FLUSH PRIVILEGES;
+EOF
     
     print_status "Installing mail server packages..."
     
