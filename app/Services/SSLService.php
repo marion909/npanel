@@ -243,9 +243,9 @@ class SSLService
             File::makeDirectory($certDir, 0755, true);
         }
 
-        // Install certificate using acme.sh
+        // Install certificate using acme.sh with --ecc flag for ECC certificates
         $command = sprintf(
-            '%s --install-cert -d %s --cert-file %s --key-file %s --fullchain-file %s',
+            '%s --install-cert -d %s --ecc --cert-file %s --key-file %s --fullchain-file %s',
             $this->acmeShPath,
             $domainName,
             $this->getCertPath($domainName),
