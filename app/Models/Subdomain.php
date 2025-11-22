@@ -15,10 +15,12 @@ class Subdomain extends Model
         'php_version',
         'php_fpm_pool',
         'ssl_enabled',
+        'wordpress_installed',
     ];
 
     protected $casts = [
         'ssl_enabled' => 'boolean',
+        'wordpress_installed' => 'boolean',
     ];
 
     public function parentDomain(): BelongsTo

@@ -29,9 +29,12 @@ class InstallWordPressJob implements ShouldQueue
 
             $result = $wpService->installWordPress($this->subdomain);
 
-            // Store credentials in cache for 1 hour (user needs to see them)
+            // Mark subdomain as having WordPress installed
+            $this->subdomain->update(['wordpress_installed' => true]);
+
+            // Store credentials in cache for 24 hours
             $cacheKey = 'wordpress_credentials_' . $this->subdomain->id;
-            Cache::put($cacheKey, $result['credentials'], 3600);
+            Cache::put($cacheKey, $result['credentials'], 86400);
 
             Log::info('WordPress installation job completed', [
                 'subdomain_id' => $this->subdomain->id,

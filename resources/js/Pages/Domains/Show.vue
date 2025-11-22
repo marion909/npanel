@@ -157,9 +157,20 @@
                                                 PHP {{ subdomain.php_version }}
                                             </span>
                                             <span v-if="subdomain.ssl_enabled" class="text-xs text-green-600">SSL Enabled</span>
+                                            <span v-if="subdomain.wordpress_installed" class="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded flex items-center">
+                                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
+                                                </svg>
+                                                WordPress
+                                            </span>
                                         </div>
                                     </div>
                                     <div class="flex space-x-2">
+                                        <button v-if="subdomain.wordpress_installed" 
+                                                @click="showWordPressInfo(subdomain)" 
+                                                class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm">
+                                            WP Info
+                                        </button>
                                         <button @click="editSubdomain(subdomain)" class="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
                                         <button v-if="!['www', '@'].includes(subdomain.subdomain_name)" 
                                                 @click="deleteSubdomain(subdomain)" 
@@ -711,6 +722,24 @@ const copyToClipboard = async (text) => {
     } catch (err) {
         console.error('Failed to copy:', err);
         alert('Kopieren fehlgeschlagen. Bitte manuell kopieren.');
+    }
+};
+
+// Show WordPress info for subdomain
+const showWordPressInfo = async (subdomain) => {
+    try {
+        const response = await fetch(`/domains/${props.domain.id}/subdomains/${subdomain.id}/wordpress-credentials`);
+        const data = await response.json();
+        
+        if (data.success && data.credentials) {
+            wordPressCredentials.value = data.credentials;
+            showWordPressCredentials.value = true;
+        } else {
+            alert('WordPress Zugangsdaten nicht gefunden oder abgelaufen.');
+        }
+    } catch (error) {
+        console.error('Failed to fetch WordPress credentials:', error);
+        alert('Fehler beim Abrufen der WordPress Zugangsdaten.');
     }
 };
 
