@@ -61,12 +61,17 @@ class WordPressService
             $wpZipPath = '/tmp/wordpress-' . time() . '.tar.gz';
             $wpDownloadUrl = 'https://wordpress.org/latest.tar.gz';
 
-            // Download WordPress
-            $response = Http::timeout(120)->get($wpDownloadUrl);
-            if (!$response->successful()) {
-                throw new \Exception('Failed to download WordPress');
+            // Download WordPress using wget (more reliable for large files)
+            exec("wget -q -O {$wpZipPath} {$wpDownloadUrl}", $output, $returnCode);
+            if ($returnCode !== 0 || !File::exists($wpZipPath)) {
+                // Fallback to curl if wget fails
+                exec("curl -sL -o {$wpZipPath} {$wpDownloadUrl}", $output, $returnCode);
+                if ($returnCode !== 0 || !File::exists($wpZipPath)) {
+                    throw new \Exception('Failed to download WordPress');
+                }
             }
-            File::put($wpZipPath, $response->body());
+            
+            Log::info('WordPress downloaded successfully', ['size' => File::size($wpZipPath)]);
 
             // Extract WordPress
             exec("tar -xzf {$wpZipPath} -C /tmp/", $output, $returnCode);
