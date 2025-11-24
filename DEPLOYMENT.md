@@ -28,12 +28,19 @@
 # System aktualisieren
 sudo apt update && sudo apt upgrade -y
 
-# Benötigte Pakete installieren
-sudo apt install -y nginx mysql-server php8.2-fpm php8.2-mysql \
-    php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip php8.2-bcmath \
-    git composer nodejs npm certbot python3-certbot-dns-hetzner
+# Software-properties-common installieren (für PPA)
+sudo apt install -y software-properties-common git
 
-# MariaDB/MySQL sichern
+# PHP Repository hinzufügen
+sudo add-apt-repository -y ppa:ondrej/php
+sudo apt update
+
+# Benötigte Pakete installieren
+sudo apt install -y nginx mariadb-server php8.2-fpm php8.2-mysql \
+    php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip php8.2-bcmath \
+    php8.2-tokenizer composer nodejs npm certbot python3-certbot-dns-hetzner
+
+# MariaDB sichern
 sudo mysql_secure_installation
 ```
 

@@ -23,12 +23,20 @@ if [ "$FIRST_TIME" = true ]; then
     echo "Updating system packages..."
     sudo apt update && sudo apt upgrade -y
     
+    # Install software-properties-common first (needed for add-apt-repository)
+    echo "Installing software-properties-common..."
+    sudo apt install -y software-properties-common git unzip curl wget
+    
+    # Add PHP repository
+    echo "Adding PHP repository..."
+    sudo add-apt-repository -y ppa:ondrej/php
+    sudo apt update
+    
     # Install base packages
-    echo "Installing Nginx, MySQL, PHP 8.2 and extensions..."
-    sudo apt install -y nginx mysql-server \
+    echo "Installing Nginx, MariaDB, PHP 8.2 and extensions..."
+    sudo apt install -y nginx mariadb-server \
         php8.2-fpm php8.2-mysql php8.2-mbstring php8.2-xml \
-        php8.2-curl php8.2-zip php8.2-bcmath php8.2-json php8.2-tokenizer \
-        git unzip curl wget software-properties-common
+        php8.2-curl php8.2-zip php8.2-bcmath php8.2-tokenizer
     
     # Install Node.js 18+
     if ! command -v node &> /dev/null; then
@@ -49,7 +57,7 @@ if [ "$FIRST_TIME" = true ]; then
     echo "Installing Certbot with dns-hetzner plugin..."
     sudo apt install -y certbot python3-certbot-nginx python3-certbot-dns-hetzner
     
-    # Secure MySQL installation
+    # Secure MariaDB installation
     echo ""
     echo ">>> Please run 'sudo mysql_secure_installation' manually after this script."
     echo ">>> Then create the database with:"
@@ -64,10 +72,10 @@ if [ "$FIRST_TIME" = true ]; then
     # Start services
     echo "Starting services..."
     sudo systemctl enable nginx
-    sudo systemctl enable mysql
+    sudo systemctl enable mariadb
     sudo systemctl enable php8.2-fpm
     sudo systemctl start nginx
-    sudo systemctl start mysql
+    sudo systemctl start mariadb
     sudo systemctl start php8.2-fpm
     
     echo ">>> System prerequisites installed!"
