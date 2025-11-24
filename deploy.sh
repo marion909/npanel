@@ -69,15 +69,52 @@ if [ "$FIRST_TIME" = true ]; then
     
     # Secure MariaDB installation
     echo ""
-    echo ">>> Please run 'sudo mysql_secure_installation' manually after this script."
-    echo ">>> Then create the database with:"
-    echo "    sudo mysql -u root -p"
-    echo "    CREATE DATABASE npanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-    echo "    CREATE USER 'npanel'@'localhost' IDENTIFIED BY 'YOUR_PASSWORD';"
-    echo "    GRANT ALL PRIVILEGES ON npanel.* TO 'npanel'@'localhost';"
-    echo "    FLUSH PRIVILEGES;"
-    echo "    EXIT;"
+    echo "=========================================="
+    echo "DATABASE SETUP REQUIRED"
+    echo "=========================================="
     echo ""
+    echo "Creating database and user..."
+    
+    # Try to create database without password (fresh MariaDB install)
+    if sudo mysql -e "CREATE DATABASE IF NOT EXISTS npanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null; then
+        echo "✓ Database 'npanel' created"
+        
+        # Prompt for password
+        echo ""
+        read -sp "Enter password for npanel user: " DB_PASSWORD
+        echo ""
+        
+        # Create user and grant privileges
+        sudo mysql <<EOF
+CREATE USER IF NOT EXISTS 'npanel'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
+GRANT ALL PRIVILEGES ON npanel.* TO 'npanel'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+        
+        echo "✓ User 'npanel' created with privileges"
+        echo ""
+        echo "Please update your .env file with:"
+        echo "  DB_USERNAME=npanel"
+        echo "  DB_PASSWORD=$DB_PASSWORD"
+        echo ""
+    else
+        echo "⚠ Could not create database automatically."
+        echo ""
+        echo "Please run manually:"
+        echo "  sudo mysql_secure_installation"
+        echo ""
+        echo "Then create the database:"
+        echo "  sudo mysql"
+        echo "  CREATE DATABASE npanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+        echo "  CREATE USER 'npanel'@'localhost' IDENTIFIED BY 'YOUR_PASSWORD';"
+        echo "  GRANT ALL PRIVILEGES ON npanel.* TO 'npanel'@'localhost';"
+        echo "  FLUSH PRIVILEGES;"
+        echo "  EXIT;"
+        echo ""
+        echo "Then update .env and re-run: ./deploy.sh"
+        echo ""
+        exit 1
+    fi
     
     # Start services
     echo "Starting services..."
@@ -98,6 +135,37 @@ if [ ! -f .env ]; then
     echo "Copy .env.example to .env and configure it first."
     exit 1
 fi
+
+# Check database configuration
+echo ">>> Checking database configuration..."
+DB_USER=$(grep "^DB_USERNAME=" .env | cut -d'=' -f2)
+DB_PASS=$(grep "^DB_PASSWORD=" .env | cut -d'=' -f2)
+DB_NAME=$(grep "^DB_DATABASE=" .env | cut -d'=' -f2)
+
+if [ -z "$DB_USER" ] || [ -z "$DB_NAME" ]; then
+    echo "Error: Database not configured in .env!"
+    echo "Please set DB_USERNAME, DB_PASSWORD, and DB_DATABASE"
+    exit 1
+fi
+
+# Test database connection
+if ! php artisan db:show 2>/dev/null; then
+    echo ""
+    echo "⚠ Cannot connect to database!"
+    echo ""
+    echo "Current .env settings:"
+    echo "  DB_USERNAME=$DB_USER"
+    echo "  DB_DATABASE=$DB_NAME"
+    echo ""
+    echo "Please verify:"
+    echo "  1. Database '$DB_NAME' exists"
+    echo "  2. User '$DB_USER' has access"
+    echo "  3. Password is correct in .env"
+    echo ""
+    exit 1
+fi
+
+echo "✓ Database connection successful"
 
 # Enable maintenance mode
 echo ">>> Enabling maintenance mode..."
