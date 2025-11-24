@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'hetzner_dns' => [
+        'api_token' => env('HETZNER_DNS_API_TOKEN'),
+        'api_base' => env('HETZNER_DNS_API_BASE', 'https://dns.hetzner.com/api'),
+    ],
+
 ];
