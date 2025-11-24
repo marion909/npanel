@@ -31,21 +31,21 @@ import { Head, Link } from '@inertiajs/vue3';
                                 <p class="text-blue-700">Manage your domains and wildcard SSL certificates</p>
                             </Link>
                             
-                            <Link 
-                                :href="route('dns-records.index')"
+                            <a 
+                                href="/dns-records"
                                 class="block p-6 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition"
                             >
                                 <h4 class="text-xl font-bold text-green-900 mb-2">DNS Records</h4>
                                 <p class="text-green-700">View and manage all DNS records</p>
-                            </Link>
+                            </a>
                             
-                            <Link 
-                                :href="route('nginx-config-logs.index')"
+                            <a 
+                                href="/nginx-config-logs"
                                 class="block p-6 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition"
                             >
                                 <h4 class="text-xl font-bold text-purple-900 mb-2">Nginx Logs</h4>
                                 <p class="text-purple-700">View Nginx configuration deployment logs</p>
-                            </Link>
+                            </a>
                         </div>
                     </div>
                 </div>
