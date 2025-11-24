@@ -13,7 +13,7 @@ class HetznerSyncCommand extends Command
 
     public function handle(HetznerDnsService $dns): int
     {
-        if (!env('HETZNER_DNS_API_TOKEN')) {
+        if (!config('services.hetzner_dns.api_token')) {
             $this->error('No Hetzner API token configured.');
             return self::FAILURE;
         }
