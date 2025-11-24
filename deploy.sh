@@ -5,8 +5,18 @@
 
 set -e
 
+# Determine project directory
+if [ -d "/var/www/npanel" ]; then
+    PROJECT_ROOT="/var/www/npanel"
+elif [ -d "/root/npanel" ]; then
+    PROJECT_ROOT="/root/npanel"
+else
+    PROJECT_ROOT="$(pwd)"
+fi
+
 echo "=========================================="
 echo "NPanel Deployment Script"
+echo "Project: $PROJECT_ROOT"
 echo "=========================================="
 
 FIRST_TIME=false
@@ -235,6 +245,20 @@ if [ "$FIRST_TIME" = true ]; then
     # Create storage link
     php artisan storage:link
     
+    # Fix permissions for web server
+    echo ">>> Setting correct ownership and permissions..."
+    sudo chown -R www-data:www-data "$PROJECT_ROOT/storage" "$PROJECT_ROOT/bootstrap/cache"
+    sudo chmod -R 775 "$PROJECT_ROOT/storage" "$PROJECT_ROOT/bootstrap/cache"
+    
+    # If in /root, make it readable for www-data
+    if [[ "$PROJECT_ROOT" == /root/* ]]; then
+        echo "⚠ Warning: Running from /root directory"
+        echo ">>> Making /root readable for nginx..."
+        sudo chmod 755 /root
+        sudo chmod -R 755 "$PROJECT_ROOT"
+        sudo chown -R www-data:www-data "$PROJECT_ROOT/storage" "$PROJECT_ROOT/bootstrap/cache"
+    fi
+    
     # Scan Hetzner zones
     if grep -q "HETZNER_DNS_API_TOKEN=.\\+" .env; then
         echo ">>> Scanning Hetzner DNS zones..."
@@ -243,7 +267,7 @@ if [ "$FIRST_TIME" = true ]; then
     
     # Set up cron job
     echo ">>> Setting up cron job for Laravel scheduler..."
-    CRON_COMMAND="* * * * * cd $(pwd) && php artisan schedule:run >> /dev/null 2>&1"
+    CRON_COMMAND="* * * * * cd $PROJECT_ROOT && php artisan schedule:run >> /dev/null 2>&1"
     (crontab -l 2>/dev/null | grep -v "artisan schedule:run"; echo "$CRON_COMMAND") | crontab -
     echo "✓ Cron job installed"
     
@@ -266,7 +290,7 @@ server {
     listen 80 default_server;
     listen [::]:80 default_server;
     server_name $DOMAIN_NAME _;
-    root $(pwd)/public;
+    root $PROJECT_ROOT/public;
     index index.php index.html;
 
     add_header X-Frame-Options "SAMEORIGIN";
@@ -339,8 +363,8 @@ fi
 
 # Set proper permissions
 echo ">>> Setting permissions..."
-chown -R www-data:www-data storage bootstrap/cache
-chmod -R 775 storage bootstrap/cache
+sudo chown -R www-data:www-data "$PROJECT_ROOT/storage" "$PROJECT_ROOT/bootstrap/cache"
+sudo chmod -R 775 "$PROJECT_ROOT/storage" "$PROJECT_ROOT/bootstrap/cache"
 
 # Restart services if available
 if systemctl is-active --quiet php8.2-fpm; then
