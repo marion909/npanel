@@ -52,11 +52,20 @@ if [ "$FIRST_TIME" = true ]; then
         curl -sS https://getcomposer.org/installer | php
         sudo mv composer.phar /usr/local/bin/composer
         sudo chmod +x /usr/local/bin/composer
+    else
+        # Move local composer.phar if it exists
+        if [ -f composer.phar ]; then
+            sudo mv composer.phar /usr/local/bin/composer
+            sudo chmod +x /usr/local/bin/composer
+        fi
     fi
     
     # Install Certbot with DNS Hetzner plugin
-    echo "Installing Certbot with dns-hetzner plugin..."
-    sudo apt install -y certbot python3-certbot-nginx python3-certbot-dns-hetzner
+    echo "Installing Certbot and Python pip..."
+    sudo apt install -y certbot python3-certbot-nginx python3-pip
+    
+    echo "Installing certbot-dns-hetzner via pip..."
+    sudo pip3 install certbot-dns-hetzner
     
     # Secure MariaDB installation
     echo ""
