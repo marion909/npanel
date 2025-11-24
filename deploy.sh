@@ -219,42 +219,95 @@ if [ "$FIRST_TIME" = true ]; then
         php artisan hetzner:zone-scan
     fi
     
+    # Set up cron job
+    echo ">>> Setting up cron job for Laravel scheduler..."
+    CRON_COMMAND="* * * * * cd $(pwd) && php artisan schedule:run >> /dev/null 2>&1"
+    (crontab -l 2>/dev/null | grep -v "artisan schedule:run"; echo "$CRON_COMMAND") | crontab -
+    echo "✓ Cron job installed"
+    
+    # Get domain name from .env or prompt
+    APP_URL=$(grep "^APP_URL=" .env | cut -d'=' -f2 | sed 's|http://||' | sed 's|https://||' | sed 's|/||g')
+    
+    if [ -z "$APP_URL" ] || [ "$APP_URL" = "localhost" ]; then
+        echo ""
+        read -p "Enter your domain name (e.g., panel.example.com): " DOMAIN_NAME
+    else
+        DOMAIN_NAME="$APP_URL"
+    fi
+    
+    # Create Nginx configuration
+    echo ">>> Creating Nginx configuration..."
+    NGINX_CONF="/etc/nginx/sites-available/npanel"
+    
+    sudo tee "$NGINX_CONF" > /dev/null <<EOF
+server {
+    listen 80;
+    server_name $DOMAIN_NAME;
+    root $(pwd)/public;
+    index index.php index.html;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+        fastcgi_index index.php;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+EOF
+    
+    # Enable site
+    sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/npanel
+    
+    # Test and reload Nginx
+    if sudo nginx -t; then
+        sudo systemctl reload nginx
+        echo "✓ Nginx configured and reloaded"
+    else
+        echo "⚠ Nginx configuration has errors. Please check manually."
+    fi
+    
+    # Set up SSL with Certbot if domain is not localhost
+    if [ "$DOMAIN_NAME" != "localhost" ] && [ ! -z "$DOMAIN_NAME" ]; then
+        echo ""
+        read -p "Set up SSL certificate with Let's Encrypt? (y/n): " SETUP_SSL
+        
+        if [ "$SETUP_SSL" = "y" ] || [ "$SETUP_SSL" = "Y" ]; then
+            echo ">>> Setting up SSL with Certbot..."
+            sudo certbot --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos --register-unsafely-without-email || {
+                echo "⚠ Certbot failed. You can run it manually later:"
+                echo "  sudo certbot --nginx -d $DOMAIN_NAME"
+            }
+        fi
+    fi
+    
     echo ""
-    echo ">>> First-time setup complete!"
-    echo ">>> Don't forget to:"
-    echo "    1. Run 'sudo mysql_secure_installation' if not done yet"
-    echo "    2. Create MySQL database and user (see instructions above)"
-    echo "    3. Configure your Nginx virtual host:"
-    echo "       sudo nano /etc/nginx/sites-available/npanel"
-    echo "       sudo ln -s /etc/nginx/sites-available/npanel /etc/nginx/sites-enabled/"
-    echo "       sudo nginx -t && sudo systemctl reload nginx"
-    echo "    4. Set up SSL with Certbot:"
-    echo "       sudo certbot --nginx -d your-domain.com"
-    echo "    5. Configure cron for scheduled tasks:"
-    echo "       crontab -e"
-    echo "       * * * * * cd $(pwd) && php artisan schedule:run >> /dev/null 2>&1"
+    echo "=========================================="
+    echo "First-time setup complete!"
+    echo "=========================================="
     echo ""
-    echo "    Nginx example config:"
-    echo "    server {"
-    echo "        listen 80;"
-    echo "        server_name your-domain.com;"
-    echo "        root $(pwd)/public;"
-    echo "        index index.php;"
+    echo "✓ Storage linked"
+    echo "✓ Cron job installed"
+    echo "✓ Nginx configured"
+    [ "$SETUP_SSL" = "y" ] && echo "✓ SSL certificate requested"
     echo ""
-    echo "        location / {"
-    echo "            try_files \$uri \$uri/ /index.php?\$query_string;"
-    echo "        }"
+    echo "Your NPanel is ready at: http://$DOMAIN_NAME"
     echo ""
-    echo "        location ~ \.php$ {"
-    echo "            include fastcgi_params;"
-    echo "            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;"
-    echo "            fastcgi_pass unix:/run/php/php8.2-fpm.sock;"
-    echo "        }"
+    echo "Next steps:"
+    echo "  1. Register your first user account"
+    echo "  2. Add your first domain"
+    echo "  3. Configure Hetzner DNS API token in .env if not done yet"
     echo ""
-    echo "        location ~ /\.(?!well-known).* {"
-    echo "            deny all;"
-    echo "        }"
-    echo "    }"
 fi
 
 # Set proper permissions
