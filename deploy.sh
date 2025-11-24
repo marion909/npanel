@@ -263,8 +263,9 @@ if [ "$FIRST_TIME" = true ]; then
     
     sudo tee "$NGINX_CONF" > /dev/null <<EOF
 server {
-    listen 80;
-    server_name $DOMAIN_NAME;
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name $DOMAIN_NAME _;
     root $(pwd)/public;
     index index.php index.html;
 
@@ -288,7 +289,11 @@ server {
 }
 EOF
     
-    # Enable site
+    # Disable default Nginx site
+    echo ">>> Disabling default Nginx site..."
+    sudo rm -f /etc/nginx/sites-enabled/default
+    
+    # Enable NPanel site
     sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/npanel
     
     # Test and reload Nginx
