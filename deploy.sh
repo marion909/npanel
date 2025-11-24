@@ -65,7 +65,7 @@ if [ "$FIRST_TIME" = true ]; then
     sudo apt install -y certbot python3-certbot-nginx python3-pip
     
     echo "Installing certbot-dns-hetzner via pip..."
-    sudo pip3 install certbot-dns-hetzner
+    sudo pip3 install certbot-dns-hetzner --break-system-packages
     
     # Secure MariaDB installation
     echo ""
