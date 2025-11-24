@@ -65,55 +65,73 @@ if [ "$FIRST_TIME" = true ]; then
     sudo apt install -y certbot python3-certbot-nginx python3-pip
     
     echo "Installing certbot-dns-hetzner via pip..."
-    sudo pip3 install certbot-dns-hetzner --break-system-packages
+    sudo pip3 install certbot-dns-hetzner --break-system-packages 2>/dev/null || \
+        sudo pip3 install certbot-dns-hetzner --break-system-packages --root-user-action=ignore
     
     # Secure MariaDB installation
     echo ""
     echo "=========================================="
-    echo "DATABASE SETUP REQUIRED"
+    echo "DATABASE SETUP"
     echo "=========================================="
     echo ""
+    
+    # Generate random password for database
+    DB_PASSWORD=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 24)
+    
+    # Secure MariaDB automatically
+    echo "Securing MariaDB installation..."
+    sudo mysql -e "ALTER USER IF EXISTS 'root'@'localhost' IDENTIFIED BY '$DB_PASSWORD';" 2>/dev/null || true
+    sudo mysql -e "DELETE FROM mysql.user WHERE User='';" 2>/dev/null || true
+    sudo mysql -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');" 2>/dev/null || true
+    sudo mysql -e "DROP DATABASE IF EXISTS test;" 2>/dev/null || true
+    sudo mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" 2>/dev/null || true
+    sudo mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
+    
+    # Create database and user
     echo "Creating database and user..."
     
-    # Try to create database without password (fresh MariaDB install)
+    # Try without password first (fresh install)
     if sudo mysql -e "CREATE DATABASE IF NOT EXISTS npanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null; then
         echo "✓ Database 'npanel' created"
         
-        # Prompt for password
-        echo ""
-        read -sp "Enter password for npanel user: " DB_PASSWORD
-        echo ""
-        
         # Create user and grant privileges
-        sudo mysql <<EOF
+        sudo mysql <<EOF 2>/dev/null
 CREATE USER IF NOT EXISTS 'npanel'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
 GRANT ALL PRIVILEGES ON npanel.* TO 'npanel'@'localhost';
 FLUSH PRIVILEGES;
 EOF
         
         echo "✓ User 'npanel' created with privileges"
-        echo ""
-        echo "Please update your .env file with:"
-        echo "  DB_USERNAME=npanel"
-        echo "  DB_PASSWORD=$DB_PASSWORD"
-        echo ""
+        
     else
-        echo "⚠ Could not create database automatically."
-        echo ""
-        echo "Please run manually:"
-        echo "  sudo mysql_secure_installation"
-        echo ""
-        echo "Then create the database:"
-        echo "  sudo mysql"
-        echo "  CREATE DATABASE npanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-        echo "  CREATE USER 'npanel'@'localhost' IDENTIFIED BY 'YOUR_PASSWORD';"
-        echo "  GRANT ALL PRIVILEGES ON npanel.* TO 'npanel'@'localhost';"
-        echo "  FLUSH PRIVILEGES;"
-        echo "  EXIT;"
-        echo ""
-        echo "Then update .env and re-run: ./deploy.sh"
-        echo ""
-        exit 1
+        # Try with socket authentication
+        echo "Trying alternative authentication method..."
+        
+        sudo mysql --defaults-file=/etc/mysql/debian.cnf <<EOF 2>/dev/null || sudo mysql -u root <<EOF
+CREATE DATABASE IF NOT EXISTS npanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'npanel'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
+GRANT ALL PRIVILEGES ON npanel.* TO 'npanel'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+        
+        if [ $? -eq 0 ]; then
+            echo "✓ Database and user created successfully"
+        else
+            echo "✗ Could not create database. Using existing configuration."
+            # Try to get existing password from .env
+            if [ -f .env ]; then
+                DB_PASSWORD=$(grep "^DB_PASSWORD=" .env | cut -d'=' -f2)
+            fi
+        fi
+    fi
+    
+    # Update .env file automatically
+    echo "Updating .env configuration..."
+    if [ -f .env ]; then
+        sed -i "s/^DB_USERNAME=.*/DB_USERNAME=npanel/" .env
+        sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=$DB_PASSWORD/" .env
+        sed -i "s/^DB_DATABASE=.*/DB_DATABASE=npanel/" .env
+        echo "✓ .env updated with database credentials"
     fi
     
     # Start services
