@@ -23,13 +23,14 @@ if [ "$FIRST_TIME" = true ]; then
     echo "Updating system packages..."
     sudo apt update && sudo apt upgrade -y
     
-    # Install software-properties-common first (needed for add-apt-repository)
-    echo "Installing software-properties-common..."
-    sudo apt install -y software-properties-common git unzip curl wget
+    # Install basic tools first
+    echo "Installing basic tools..."
+    sudo apt install -y git unzip curl wget gnupg2 ca-certificates lsb-release apt-transport-https
     
-    # Add PHP repository
+    # Add Sury PHP repository (works on Debian and Ubuntu)
     echo "Adding PHP repository..."
-    sudo add-apt-repository -y ppa:ondrej/php
+    sudo curl -sSLo /usr/share/keyrings/deb.sury.org-php.gpg https://packages.sury.org/php/apt.gpg
+    sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
     sudo apt update
     
     # Install base packages
