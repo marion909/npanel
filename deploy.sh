@@ -107,14 +107,20 @@ EOF
         # Try with socket authentication
         echo "Trying alternative authentication method..."
         
-        sudo mysql --defaults-file=/etc/mysql/debian.cnf <<EOF 2>/dev/null || sudo mysql -u root <<EOF
-CREATE DATABASE IF NOT EXISTS npanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+        # Try debian.cnf first, then root without password
+        if sudo mysql --defaults-file=/etc/mysql/debian.cnf -e "CREATE DATABASE IF NOT EXISTS npanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null; then
+            sudo mysql --defaults-file=/etc/mysql/debian.cnf <<EOF
 CREATE USER IF NOT EXISTS 'npanel'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
 GRANT ALL PRIVILEGES ON npanel.* TO 'npanel'@'localhost';
 FLUSH PRIVILEGES;
 EOF
-        
-        if [ $? -eq 0 ]; then
+            echo "✓ Database and user created successfully"
+        elif sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS npanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null; then
+            sudo mysql -u root <<EOF
+CREATE USER IF NOT EXISTS 'npanel'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
+GRANT ALL PRIVILEGES ON npanel.* TO 'npanel'@'localhost';
+FLUSH PRIVILEGES;
+EOF
             echo "✓ Database and user created successfully"
         else
             echo "✗ Could not create database. Using existing configuration."
